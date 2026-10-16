@@ -3,7 +3,7 @@ import type { World } from './world';
 import type { Effects } from './fx';
 import { PEE, type Combatant, type PeeKind, type SpatialGrid } from './combat';
 
-const MAX = 3200;
+const MAX = 5200;
 export const DROP_SPEED = 20;
 export const GRAVITY = 9;
 export const RATE = 48; // droplets per second while peeing
@@ -57,8 +57,8 @@ export class PeeSystem {
   }
 
   /** Emit this frame's share of a continuous stream. */
-  emit(shooter: Combatant, origin: THREE.Vector3, dir: THREE.Vector3, kind: PeeKind, dt: number, spread = 0.03) {
-    const a = (this.acc.get(shooter.id) ?? 0) + dt * RATE;
+  emit(shooter: Combatant, origin: THREE.Vector3, dir: THREE.Vector3, kind: PeeKind, dt: number, spread = 0.03, rate = 1) {
+    const a = (this.acc.get(shooter.id) ?? 0) + dt * RATE * rate;
     const n = Math.floor(a);
     this.acc.set(shooter.id, a - n);
     const ki = KINDS.indexOf(kind);
@@ -113,7 +113,7 @@ export class PeeSystem {
 
       // did it land on somebody?
       const shooter = this.shooter[i]!;
-      c.grid.query(x, z, 0.8, near);
+      c.grid.query(x, z, 1.2, near);
       let hit: Combatant | null = null;
       for (let k = 0; k < near.length; k++) {
         const t = near[k];
@@ -121,7 +121,7 @@ export class PeeSystem {
         if (kind === 'heal' ? t.team !== shooter.team : t.team === shooter.team) continue; // heal goes to friends, the rest to enemies
         const dx = t.pos.x - x;
         const dz = t.pos.z - z;
-        if (dx * dx + dz * dz < 0.3 && y > t.pos.y && y < t.pos.y + 1.6) { hit = t; break; }
+        if (dx * dx + dz * dz < (t.hitR2 ?? 0.3) && y > t.pos.y && y < t.pos.y + (t.hitH ?? 1.6)) { hit = t; break; }
       }
       if (hit) {
         c.onHit(hit, kind, shooter, tmpP.set(x, y, z));

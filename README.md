@@ -1,8 +1,9 @@
-# Piddle Wars: The Enchanted Forest
+# Piss Gnomes: The Enchanted Forest
 
-A silly 50 v 50 first-person capture-the-zones game in a huge enchanted forest. Your only weapon is your
-bladder. Find potions and the stream changes what it does. Gnomes versus goblins; you play one of the 50.
-Single player (the other 99 are bots). Built with TypeScript, Vite and Three.js, derived from *Gnome Strike*.
+A silly, psychedelic 50 v 50 first-person capture-the-zones game in a huge enchanted forest. Your only weapon is
+your bladder. Find potions and the stream changes what it does. Red-hat gnomes versus blue-cap gnomes; you play one
+of the 50. Hop on a giant spider, beetle or ladybug with a pee cannon on its back. Single player (the other 99 are
+bots). Built with TypeScript, Vite and Three.js, derived from *Gnome Strike*.
 
 ## Run it
 
@@ -28,7 +29,14 @@ npm run build      # single self-contained dist/index.html you can double-click
   - Plain pee makes enemies **wet**, which is what makes fire weak and shock/frost strong.
 - **Zones:** there are seven. Stand in one to capture it; the more of you, the faster. The side holding more zones
   drains the other's tickets, and every death costs a ticket. Run the other side out of tickets to win.
-- **Controls:** WASD move, Space jump, Shift walk, mouse aim, hold click to pee, Esc pause, M voices on/off.
+- **Bugs:** Disco Spider (fast, twin cannons), Tank Beetle (slow, tough, shotgun-style cannons), Zoom Ladybug (very
+  fast, fragile). Press **E** next to one to ride it; while you ride, the bug takes the damage. Bots ride them too, and
+  popped bugs come back after 40 seconds.
+- **Sound:** footsteps (boots, skittering legs, beetle thumps), jumps, splashing, a night-forest ambience and a
+  generative music engine that plays weird scales in odd time signatures. The scale changes with your potion.
+- **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. **T** cycles full / mild / off.
+- **Controls:** WASD move, Space jump, Shift walk, mouse aim, hold click to pee, E ride / hop off, Esc pause,
+  M voices, N music, T trip level.
 
 ## Code map
 
@@ -38,4 +46,5 @@ npm run build      # single self-contained dist/index.html you can double-click
 - `src/nav.ts` – coarse walkable grid and heap A* for 100 bots
 - `src/fighter.ts` – bot models (baked into a few meshes each) and AI
 - `src/pee.ts`, `src/combat.ts` – droplets, potion types, status effects
+- `src/mounts.ts` – the rideable bugs; `src/music.ts` – generative music; `src/trip.ts` – sky, spores and the warp pass
 - `src/potions.ts`, `src/zones.ts`, `src/player.ts`, `src/fx.ts`, `src/audio.ts`, `src/gnome.ts`

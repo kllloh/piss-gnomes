@@ -10,6 +10,9 @@ import { Potions } from './potions';
 import { Zones, type Zone } from './zones';
 import { Effects } from './fx';
 import { Sound } from './audio';
+import { Music } from './music';
+import { Trip } from './trip';
+import { Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
 
 // --- rules --------------------------------------------------------------------------
@@ -18,15 +21,15 @@ const START_TICKETS = 400;
 const PLAYER_RESPAWN = 5;
 const NAMES: Record<Faction, string[]> = {
   gnome: ['Barnaby', 'Bramble', 'Pip', 'Hobb', 'Moss', 'Thistle', 'Tuck', 'Wren', 'Fennel', 'Nettle', 'Dill', 'Basil', 'Sorrel', 'Tansy', 'Burdock', 'Sage', 'Clover', 'Hazel', 'Rue', 'Yarrow', 'Bracken', 'Teasel', 'Bumble', 'Cobb', 'Dibble'],
-  goblin: ['Grubnak', 'Snaggle', 'Skrag', 'Nibwick', 'Zog', 'Mugsy', 'Rotgut', 'Blort', 'Gnash', 'Krunk', 'Wartle', 'Slag', 'Gribble', 'Mog', 'Spitz', 'Drool', 'Bonk', 'Fizzle', 'Grot', 'Snot', 'Yark', 'Muckle', 'Bogey', 'Clag', 'Gubbins'],
+  goblin: ['Grumbold', 'Snorri', 'Flint', 'Gimble', 'Nobbin', 'Pebble', 'Rumble', 'Tinker', 'Wobble', 'Burl', 'Mudge', 'Nibbs', 'Oakley', 'Pogo', 'Quill', 'Rooster', 'Stumpy', 'Tumble', 'Umber', 'Wick', 'Yodel', 'Zinnia', 'Crumb', 'Doodle', 'Fungo'],
 };
 const LINES: Record<Faction, string[]> = {
-  gnome: ['Nature calls!', 'Hold still, I am watering!', 'Rinse and repeat!', 'Get out of my garden!'],
-  goblin: ['Heh heh, wet bandit!', 'You smell now!', 'Splash!', 'Me aim good!'],
+  gnome: ['Nature calls!', 'Hold still, I am watering!', 'Rinse and repeat!', 'Get out of my garden!', 'Gnome sweet gnome!'],
+  goblin: ['Taste the rainbow!', 'Stream of consciousness!', 'Did somebody say wee?', 'Piss gnomes forever!', 'Whoa, the colours!'],
 };
 const FACTION_INFO: Record<Faction, { label: string; color: string; hex: number }> = {
-  gnome: { label: 'GNOMES', color: '#ff7a7a', hex: 0xe04a4a },
-  goblin: { label: 'GOBLINS', color: '#8fe06a', hex: 0x7ddc4a },
+  gnome: { label: 'RED HATS', color: '#ff7a7a', hex: 0xe04a4a },
+  goblin: { label: 'BLUE CAPS', color: '#7ab4ff', hex: 0x4a8aff },
 };
 const otherFaction = (f: Faction): Faction => (f === 'gnome' ? 'goblin' : 'gnome');
 const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
@@ -58,7 +61,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c2a44);
 const fog = new THREE.Fog(0x213a52, 30, 150);
 scene.fog = fog;
-scene.add(new THREE.HemisphereLight(0x9fc4ff, 0x2a4a3a, 1.35));
+const hemi = new THREE.HemisphereLight(0x9fc4ff, 0x2a4a3a, 1.35);
+scene.add(hemi);
 const moon = new THREE.DirectionalLight(0xb4ccff, 1.5);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
@@ -81,6 +85,29 @@ const grid = new SpatialGrid(HALF);
 const pee = new PeeSystem(scene);
 const zones = new Zones(world, forest.zones);
 const potions = new Potions(scene, forest.potionSpots);
+const music = new Music(() => sound.context);
+const trip = new Trip(renderer, scene);
+
+// giant bugs to ride: a few at each base, a couple around every zone
+const mountSpots: MountSpot[] = [];
+{
+  const types: MountType[] = ['spider', 'beetle', 'ladybug'];
+  let n = 0;
+  const clear = (x: number, z: number): THREE.Vector3 => {
+    for (let k = 0; k < 20; k++) {
+      const px = x + (Math.random() - 0.5) * 2 * (3 + k);
+      const pz = z + (Math.random() - 0.5) * 2 * (3 + k);
+      if (nav.isFreeAt(px, pz)) return new THREE.Vector3(px, 0, pz);
+    }
+    return new THREE.Vector3(x, 0, z);
+  };
+  for (const side of [1, -1]) {
+    const b = side === 1 ? forest.baseSouth : forest.baseNorth;
+    for (let i = 0; i < 3; i++) mountSpots.push({ type: types[n++ % 3], pos: clear(b.x + (i - 1) * 7, b.z - side * 9) });
+  }
+  for (const z of forest.zones) for (let i = 0; i < 2; i++) mountSpots.push({ type: types[n++ % 3], pos: clear(z.x + (i ? 9 : -9), z.z + (i ? -6 : 6)) });
+}
+const mounts = new Mounts(scene, mountSpots);
 
 // --- HUD ---------------------------------------------------------------------------------
 const $ = (id: string) => document.getElementById(id)!;
@@ -98,6 +125,8 @@ const elPotionFill = $('potionfill');
 const elBladder = $('bladderfill');
 const elHp = $('hp');
 const elStats = $('stats');
+const elMount = $('mountinfo');
+const elPrompt = $('prompt');
 const mini = $('minimap') as HTMLCanvasElement;
 const miniCtx = mini.getContext('2d')!;
 
@@ -191,6 +220,8 @@ function newMatch() {
   phase = 'play';
   zones.reset(forest.zones);
   potions.reset();
+  mounts.reset();
+  player.mount = null;
   pee.clear();
   fx.clearGore();
   const south = shuffled(forest.spawnSouth);
@@ -299,7 +330,7 @@ function registerKill(victim: Combatant, from: Combatant | null, kind: PeeKind) 
 
 // grid of who is where, rebuilt every frame
 const fightCtx: FightCtx = {
-  world, nav, grid, pee, zones, potions, fx, time: 0, viewer: camera.position,
+  world, nav, grid, pee, zones, potions, mounts, fx, time: 0, viewer: camera.position,
   onKill: (victim, from, kind) => registerKill(victim, from, kind),
   respawn: (f) => {
     const r = respawnPoint(f.team);
@@ -324,6 +355,22 @@ zones.onCapture = (z: Zone, owner) => {
   sound.horn(mine);
 };
 
+mounts.onHurt = (m) => {
+  const sp = sound.spatial(m.pos.x, m.pos.z);
+  if (Math.random() < 0.35) sound.mountHit(sp.vol * 0.7, sp.pan);
+};
+mounts.onBreak = (m, rider, from) => {
+  const at = new THREE.Vector3(m.pos.x, 0.8, m.pos.z);
+  const up = new THREE.Vector3(0, 1, 0);
+  fx.gibs(at, [0xff40a0, 0x40ffd0, 0xffe040, 0x8a3fd0], 22, 7, 0xff40a0, up);
+  fx.splat(m.pos, 0xff40a0, 2.2);
+  const sp = sound.spatial(m.pos.x, m.pos.z);
+  sound.mountBreak(Math.max(sp.vol, rider?.isPlayer ? 1 : 0), sp.pan);
+  const who = from?.name ?? 'The forest';
+  feedPush(`${who} popped ${rider ? rider.name + "'s " : 'a '}${MOUNT_DEFS[m.type].name}`, '#ffd0ff');
+  if (rider?.isPlayer) banner('YOUR RIDE EXPLODED INTO GOO!', 2);
+};
+
 // --- input ---------------------------------------------------------------------------------------
 let locked = false;
 let firing = false;
@@ -331,7 +378,35 @@ renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0) f
 window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousemove', (e) => { if (locked) player.look(e.movementX, e.movementY); });
+function toggleRide() {
+  if (!player.alive || !locked) return;
+  if (player.mount) {
+    const m = player.mount;
+    mounts.dismount(player);
+    player.pos.x += Math.cos(player.yaw) * (m.def.hw + 0.8); // hop off to the side
+    player.pos.z -= Math.sin(player.yaw) * (m.def.hw + 0.8);
+    player.vel.y = 4;
+    player.onGround = false;
+    sound.dismount();
+    return;
+  }
+  const m = mounts.nearestFree(player.pos.x, player.pos.z, 3.6);
+  if (m) {
+    mounts.board(m, player);
+    banner(`${m.def.name.toUpperCase()}! Press E to hop off.`, 2.2);
+    sound.mount();
+  }
+}
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE' && !e.repeat) toggleRide();
+  if (e.code === 'KeyT') {
+    trip.level = (trip.level + 2) % 3; // 2 -> 1 -> 0 -> 2
+    banner(['TRIP: OFF (BORING)', 'TRIP: MILD', 'TRIP: FULL SEND'][trip.level], 1.2);
+  }
+  if (e.code === 'KeyN') {
+    music.setEnabled(!music.on);
+    banner(music.on ? 'MUSIC ON' : 'MUSIC OFF', 1);
+  }
   if (e.code === 'KeyM') {
     sound.tauntsOn = !sound.tauntsOn;
     if (!sound.tauntsOn) sound.stopTaunts();
@@ -351,6 +426,8 @@ function startFallback() {
 }
 elOverlay.addEventListener('click', () => {
   sound.init();
+  music.start();
+  sound.ambient(true);
   try {
     const r = renderer.domElement.requestPointerLock() as unknown as Promise<void> | undefined;
     r?.catch?.(() => startFallback());
@@ -388,6 +465,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  trip.resize();
 });
 
 // --- the player's stream ---------------------------------------------------------------------------
@@ -395,6 +473,8 @@ const dirV = new THREE.Vector3();
 const originV = new THREE.Vector3();
 const landV = new THREE.Vector3();
 let outOfPee = false;
+let gurgleT = 0;
+const KIND_IDX: PeeKind[] = ['normal', 'fire', 'frost', 'acid', 'shock', 'poison', 'heal'];
 const marker3d = new THREE.Mesh(
   new THREE.CylinderGeometry(0.5, 0.5, 0.04, 20),
   new THREE.MeshBasicMaterial({ color: 0xf2d83a, transparent: true, opacity: 0.45, depthWrite: false }),
@@ -408,8 +488,9 @@ function playerPee(dt: number) {
   else if (player.bladder > 20) outOfPee = false;
   camera.updateMatrixWorld();
   camera.getWorldDirection(dirV);
-  player.eyePos(originV).addScaledVector(dirV, 0.45);
-  originV.y -= 0.6;
+  const m = player.mount;
+  player.eyePos(originV).addScaledVector(dirV, m ? 1.0 : 0.45);
+  originV.y -= m ? 0.45 : 0.6;
   const aiming = player.alive && !stuck;
   if (aiming && pee.landing(originV, dirV, world, landV)) {
     marker3d.visible = true;
@@ -420,12 +501,21 @@ function playerPee(dt: number) {
   }
   const going = firing && aiming && !outOfPee && player.bladder > 0;
   if (going) {
-    pee.emit(player, originV, dirV, kind, dt, 0.012);
-    player.bladder = Math.max(0, player.bladder - 16 * dt);
+    pee.emit(player, originV, dirV, kind, dt, m ? m.def.spread * 0.4 : 0.012, m ? m.def.rate : 1);
+    player.bladder = Math.max(0, player.bladder - 16 * dt * (m ? m.def.drain : 1));
   } else {
     player.bladder = Math.min(100, player.bladder + 10 * dt);
   }
-  sound.pee(going, ['normal', 'fire', 'frost', 'acid', 'shock', 'poison', 'heal'].indexOf(kind));
+  sound.pee(going, KIND_IDX.indexOf(kind));
+  sound.cannon(going && !!m, m?.type === 'beetle');
+  if (going) {
+    gurgleT -= dt;
+    if (gurgleT <= 0 && marker3d.visible) {
+      gurgleT = 0.11 + Math.random() * 0.08;
+      const sp = sound.spatial(marker3d.position.x, marker3d.position.z);
+      sound.gurgle(sp.vol, sp.pan);
+    }
+  }
 }
 
 // --- per-frame HUD ---------------------------------------------------------------------------------
@@ -454,6 +544,18 @@ function renderHud() {
   elBladder.style.background = col;
   elHp.textContent = `♥ ${Math.ceil(player.hp)}${player.status.burn > 0 ? ' 🔥' : ''}${player.status.chill > 0.2 ? ' ❄' : ''}${player.status.poison > 0 ? ' ☠' : ''}`;
   elStats.textContent = `Drenched ${kills} · Defeated ${deaths}`;
+  if (player.mount) {
+    const m = player.mount;
+    elMount.style.display = 'block';
+    elMount.innerHTML = `<b>${m.def.name}</b> ${Math.max(0, Math.ceil(m.hp))}/${m.maxHp}<div class="bar"><div class="fill" style="width:${(m.hp / m.maxHp) * 100}%;background:#ff40a0"></div></div>`;
+    elPrompt.style.display = 'block';
+    elPrompt.textContent = 'E — hop off';
+  } else {
+    elMount.style.display = 'none';
+    const near = player.alive ? mounts.nearestFree(player.pos.x, player.pos.z, 3.6) : null;
+    elPrompt.style.display = near ? 'block' : 'none';
+    if (near) elPrompt.textContent = `E — ride the ${near.def.name}`;
+  }
   elFeed.innerHTML = feed.map((l) => `<div style="color:${l.color}">${l.text}</div>`).join('');
 
   // minimap, north (-z) is up
@@ -477,6 +579,11 @@ function renderHud() {
     if (!p.active) continue;
     miniCtx.fillStyle = hex(PEE[p.kind].color);
     miniCtx.fillRect(mx(p.pos.x) - 1.5, mz(p.pos.z) - 1.5, 3, 3);
+  }
+  for (const m of mounts.list) {
+    if (!m.alive || m.rider) continue;
+    miniCtx.fillStyle = '#ff60e0';
+    miniCtx.fillRect(mx(m.pos.x) - 2.5, mz(m.pos.z) - 2.5, 5, 5);
   }
   for (const f of fighters) {
     if (!f.alive) continue;
@@ -520,9 +627,68 @@ function adaptQuality(dt: number) {
     } else {
       renderer.setPixelRatio(1);
       renderer.setSize(innerWidth, innerHeight);
+      trip.resize();
       camera.far = 130;
       camera.updateProjectionMatrix();
       fog.far = 110;
+    }
+  }
+}
+
+let stepDist = 0;
+let wasGround = true;
+let airT = 0;
+let lowBladderT = 0;
+let hadPotion = false;
+let wasBurn = false;
+let wasFrozen = false;
+let stepBudget = 0;
+
+/** Footsteps, jumps and landings for the player and the bots near you; status-effect cues. */
+function movementSounds(dt: number) {
+  if (player.alive) {
+    const m = player.mount;
+    if (player.onGround) {
+      stepDist += player.horizSpeed * dt;
+      const stride = m ? (m.type === 'beetle' ? 2.4 : 1.4) : 2.1;
+      if (stepDist > stride) {
+        stepDist = 0;
+        if (player.horizSpeed > 0.8) sound.step(0.75, 0, m ? (m.type === 'beetle' ? 2 : 1) : 0);
+      }
+    }
+    if (wasGround && !player.onGround && player.vel.y > 2) { sound.jump(); airT = 0; }
+    if (!player.onGround) airT += dt;
+    else {
+      if (!wasGround && airT > 0.2) sound.land(Math.min(1, airT * 1.5));
+      airT = 0;
+    }
+    wasGround = player.onGround;
+    const burning = player.status.burn > 0;
+    if (burning && !wasBurn) sound.ignite();
+    wasBurn = burning;
+    const frozen = player.status.frozen > 0;
+    if (frozen && !wasFrozen) sound.freeze();
+    wasFrozen = frozen;
+    if (hadPotion && !player.potion) sound.potionEnd();
+    hadPotion = !!player.potion;
+    lowBladderT -= dt;
+    if (firing && player.bladder < 14 && lowBladderT <= 0) { lowBladderT = 1; sound.lowBladder(); }
+  }
+  stepBudget = 4;
+  for (const f of fighters) {
+    if (!f.alive || f.speedNow < 1) continue;
+    const dx = f.pos.x - player.pos.x;
+    const dz = f.pos.z - player.pos.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > 26 * 26) continue;
+    f.stepAcc += f.speedNow * dt;
+    const m = f.mount;
+    if (f.stepAcc > (m ? (m.type === 'beetle' ? 2.4 : 1.4) : 1.9)) {
+      f.stepAcc = 0;
+      if (stepBudget-- > 0) {
+        const sp = sound.spatial(f.pos.x, f.pos.z);
+        sound.step(sp.vol * (1 - Math.sqrt(d2) / 26) * 0.8, sp.pan, m ? (m.type === 'beetle' ? 2 : 1) : 0);
+      }
     }
   }
 }
@@ -547,6 +713,8 @@ function simulate(dt: number) {
   if (player.alive && player.hp < hpBefore - 0.5) sound.hurt();
 
   for (const f of fighters) f.update(dt, fightCtx);
+  mounts.update(dt, time);
+  movementSounds(dt);
   pee.update(dt, {
     world, grid, fx,
     onHit: applyHit,
@@ -564,6 +732,8 @@ function simulate(dt: number) {
   // the player dying
   if (playerWasAlive && !player.alive) {
     deaths++;
+    mounts.dismount(player);
+    sound.cannon(false);
     registerKill(player, player.lastFrom, player.lastKind);
     respawnT = PLAYER_RESPAWN;
     banner(pick(['YOU WERE DRENCHED', 'WELL, THAT STINGS', 'RIP. THE FOREST IS UNIMPRESSED', 'SPLOOSH. YOU ARE DONE']), 2.2);
@@ -575,6 +745,7 @@ function simulate(dt: number) {
       const r = respawnPoint(0);
       player.respawn(r.pos, r.yaw);
       playerWasAlive = true;
+      sound.respawn();
     }
   }
 
@@ -600,9 +771,37 @@ function simulate(dt: number) {
   perfSim += (performance.now() - t0 - perfSim) * 0.05;
 }
 
+const fogCol = new THREE.Color();
+const TINTS: Record<PeeKind, number> = { normal: 0, fire: -0.7, frost: 0.9, acid: 0.35, shock: 0.15, poison: -1.0, heal: 0.6 };
+let tintNow = 0;
+let ampNow = 0.55;
+let fovNow = 75;
+
+function psychedelia(dt: number, vt: number, beat: number) {
+  const kind: PeeKind = player.potion?.kind ?? 'normal';
+  const target = 0.55 + (player.potion ? 0.2 : 0) + (player.mount ? 0.12 : 0) + (firing ? 0.08 : 0) + player.hurtFlash * 0.25;
+  ampNow += (Math.min(1, target) - ampNow) * Math.min(1, dt * 2);
+  tintNow += (TINTS[kind] - tintNow) * Math.min(1, dt * 1.5);
+  const lvl = trip.level / 2;
+  trip.update(vt, camera.position, beat);
+  trip.horizon(vt, fogCol);
+  fog.color.copy(fogCol);
+  (scene.background as THREE.Color).copy(fogCol);
+  hemi.color.setHSL((vt * 0.02) % 1, 0.55, 0.72);
+  hemi.groundColor.setHSL((vt * 0.02 + 0.5) % 1, 0.5, 0.26);
+  moon.color.setHSL((vt * 0.03 + 0.6) % 1, 0.45, 0.82);
+  const fovTarget = 75 + (Math.sin(vt * 0.7) * 2 + beat * 2.5) * ampNow * lvl + (player.mount ? 6 : 0);
+  fovNow += (fovTarget - fovNow) * Math.min(1, dt * 4);
+  if (Math.abs(camera.fov - fovNow) > 0.01) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
+  player.roll = (Math.sin(vt * 0.9) * 0.018 + Math.sin(vt * 0.37) * 0.012) * ampNow * lvl;
+}
+
 function tick() {
   requestAnimationFrame(tick);
   const raw = clock.getDelta();
+  const vt = clock.elapsedTime;
+  const beat = music.pulse();
+  psychedelia(Math.min(raw, 0.05), vt, beat);
   const dt = Math.min(raw, 0.05);
   if (locked) { simulate(dt); adaptQuality(raw); }
 
@@ -619,10 +818,18 @@ function tick() {
   elRespawn.style.display = !player.alive && phase === 'play' ? 'block' : 'none';
   if (!player.alive) elRespawn.textContent = `Respawning in ${Math.max(0, Math.ceil(respawnT))}…`;
   hudT += dt;
-  if (hudT > 0.1) { hudT = 0; renderHud(); }
+  if (hudT > 0.1) {
+    hudT = 0;
+    renderHud();
+    grid.query(player.pos.x, player.pos.z, 24, nearBuf);
+    let foes = 0;
+    for (const o of nearBuf) if (o.alive && o.team === 1) foes++;
+    music.setIntensity(Math.min(1, foes / 8 * 0.5 + (player.potion ? 0.25 : 0) + (player.mount ? 0.2 : 0) + (firing ? 0.15 : 0)));
+    music.setMood(KIND_IDX.indexOf(player.potion?.kind ?? 'normal'));
+  }
 
   sound.setListener(camera.position.x, camera.position.z, camera.rotation.y);
-  renderer.render(scene, camera);
+  trip.render(scene, camera, vt, ampNow, beat, tintNow);
 }
 
 applyTeamColors();
@@ -633,7 +840,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene,
+  world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   setFaction, newMatch, applyHit, respawnPoint, sim: simulate,
   get tickets() { return tickets; },

@@ -473,4 +473,186 @@ export class Sound {
     this.burst(0.4 * vol, 5000, 0.08, pan);
     this.tone(0.22 * vol, 1800, 300, 0.12, 'square', pan);
   }
+
+  // --- movement, riding and the rest of the forest ---------------------------------------
+
+  /** The audio context, for the music engine (null until the first click). */
+  get context(): AudioContext | null {
+    return this.ctx;
+  }
+
+  /** A footstep: soft grass crunch. `kind` 0 = boots, 1 = many little bug legs, 2 = heavy beetle thump. */
+  step(vol: number, pan: number, kind = 0) {
+    if (vol < 0.04) return;
+    if (kind === 1) {
+      for (let i = 0; i < 4; i++) this.burst(0.16 * vol, 4200, 0.025, pan, i * 0.035 + Math.random() * 0.015);
+      return;
+    }
+    if (kind === 2) {
+      this.burst(0.5 * vol, 700, 0.12, pan);
+      this.tone(0.45 * vol, 70, 35, 0.16, 'sine', pan);
+      return;
+    }
+    this.burst(0.2 * vol, 1500 + Math.random() * 900, 0.07, pan);
+    this.tone(0.07 * vol, 120 + Math.random() * 40, 60, 0.06, 'sine', pan);
+  }
+
+  jump() {
+    this.tone(0.14, 200, 520, 0.14, 'sine');
+    this.burst(0.08, 2000, 0.1);
+  }
+
+  land(vol = 1) {
+    this.burst(0.3 * vol, 900, 0.1);
+    this.tone(0.28 * vol, 90, 40, 0.14, 'sine');
+  }
+
+  /** Climbing on a bug: a wet squelch and a happy boing. */
+  mount() {
+    this.squelch(0.8, 0);
+    this.tone(0.22, 220, 660, 0.22, 'sine', 0, 0.05);
+    this.tone(0.12, 440, 1320, 0.18, 'triangle', 0, 0.12);
+  }
+
+  dismount() {
+    this.tone(0.2, 600, 200, 0.2, 'sine');
+    this.squelch(0.5, 0);
+  }
+
+  /** A bug getting pee on its shell: crunchy tick and a little squeal. */
+  mountHit(vol: number, pan: number) {
+    if (vol < 0.05) return;
+    this.burst(0.18 * vol, 3000, 0.05, pan);
+    this.tone(0.1 * vol, 1500, 900, 0.07, 'square', pan);
+  }
+
+  /** A bug exploding into rainbow goo. */
+  mountBreak(vol: number, pan: number) {
+    if (vol < 0.04) return;
+    this.burst(0.9 * vol, 1600, 0.6, pan);
+    this.tone(0.45 * vol, 120, 30, 0.45, 'sine', pan);
+    this.tone(0.3 * vol, 2400, 400, 0.5, 'sawtooth', pan);
+    this.squelch(0.9 * vol, pan);
+    this.tone(0.2 * vol, 300, 1200, 0.3, 'sine', pan, 0.15);
+  }
+
+  private cannonNodes: { o1: OscillatorNode; o2: OscillatorNode; lfo: OscillatorNode; gain: GainNode } | null = null;
+
+  /** The low gurgling rumble of a pee cannon charging up. */
+  cannon(on: boolean, heavy = false) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (on && !this.cannonNodes) {
+      const o1 = this.ctx.createOscillator();
+      o1.type = 'sawtooth';
+      const o2 = this.ctx.createOscillator();
+      o2.type = 'square';
+      const lfo = this.ctx.createOscillator();
+      lfo.frequency.value = 17;
+      const lg = this.ctx.createGain();
+      lg.gain.value = 9;
+      lfo.connect(lg);
+      lg.connect(o1.frequency);
+      lg.connect(o2.frequency);
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 380;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0.0001;
+      o1.connect(f);
+      o2.connect(f);
+      f.connect(gain).connect(this.ctx.destination);
+      o1.start();
+      o2.start();
+      lfo.start();
+      this.cannonNodes = { o1, o2, lfo, gain };
+    }
+    const n = this.cannonNodes;
+    if (!n) return;
+    if (on) {
+      const f = heavy ? 52 : 70;
+      n.o1.frequency.setTargetAtTime(f, t, 0.1);
+      n.o2.frequency.setTargetAtTime(f * 1.49, t, 0.1);
+      n.gain.gain.setTargetAtTime(0.07, t, 0.05);
+    } else {
+      n.gain.gain.setTargetAtTime(0.0001, t, 0.06);
+      this.cannonNodes = null;
+      setTimeout(() => {
+        try { n.o1.stop(); n.o2.stop(); n.lfo.stop(); } catch { /* already stopped */ }
+      }, 400);
+    }
+  }
+
+  /** Pee splashing on the ground: bubbly gurgle. */
+  gurgle(vol: number, pan: number) {
+    if (vol < 0.05) return;
+    this.burst(0.12 * vol, 1800, 0.08, pan);
+    const f = 300 + Math.random() * 500;
+    this.tone(0.07 * vol, f, f * 2.2, 0.07, 'sine', pan);
+  }
+
+  /** Bladder nearly empty: two nervous beeps. */
+  lowBladder() {
+    this.tone(0.1, 880, 880, 0.08, 'square');
+    this.tone(0.1, 660, 660, 0.1, 'square', 0, 0.14);
+  }
+
+  potionEnd() {
+    [784, 622, 466, 392].forEach((f, i) => this.tone(0.1, f, f * 0.97, 0.12, 'triangle', 0, i * 0.07));
+  }
+
+  respawn() {
+    this.tone(0.16, 150, 900, 0.5, 'sine');
+    this.tone(0.1, 300, 1800, 0.5, 'triangle', 0, 0.05);
+    this.burst(0.1, 5000, 0.4);
+  }
+
+  ignite() {
+    this.burst(0.35, 3200, 0.35);
+    this.tone(0.1, 120, 300, 0.3, 'sawtooth');
+  }
+
+  freeze() {
+    [2400, 3100, 3800, 4600].forEach((f, i) => this.tone(0.07, f, f * 0.6, 0.18, 'sine', 0, i * 0.04));
+  }
+
+  uiClick() {
+    this.tone(0.12, 700, 1100, 0.07, 'square');
+    this.tone(0.08, 1400, 1800, 0.07, 'triangle', 0, 0.05);
+  }
+
+  // --- night-time ambience: crickets, frogs, owls and the odd weird glooop ----------------
+
+  private ambTimer: number | undefined;
+
+  ambient(on: boolean) {
+    if (!on) {
+      if (this.ambTimer !== undefined) clearInterval(this.ambTimer);
+      this.ambTimer = undefined;
+      return;
+    }
+    if (this.ambTimer !== undefined) return;
+    this.ambTimer = window.setInterval(() => {
+      if (!this.ctx || this.ctx.state !== 'running') return;
+      const r = Math.random();
+      const pan = Math.random() * 2 - 1;
+      if (r < 0.5) { // crickets: a rapid chirp train
+        const f = 4200 + Math.random() * 800;
+        for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) this.tone(0.012, f, f * 1.02, 0.03, 'sine', pan, i * 0.06);
+      } else if (r < 0.68) { // frog
+        const f = 140 + Math.random() * 60;
+        this.tone(0.05, f, f * 1.6, 0.09, 'square', pan);
+        this.tone(0.05, f * 1.2, f * 0.8, 0.12, 'square', pan, 0.1);
+      } else if (r < 0.8) { // owl: hoo-hoo
+        this.tone(0.05, 380, 330, 0.25, 'sine', pan);
+        this.tone(0.05, 380, 320, 0.4, 'sine', pan, 0.4);
+      } else if (r < 0.92) { // distant glooop
+        const f = 150 + Math.random() * 250;
+        this.tone(0.04, f, f * 4, 0.35, 'sine', pan);
+        this.tone(0.025, f * 1.5, f * 5, 0.35, 'triangle', pan, 0.05);
+      } else { // a faint giggle from nowhere
+        for (let i = 0; i < 4; i++) this.vowel(0.05, 500 + Math.random() * 200, 420, 0.08, 1100, pan, i * 0.11);
+      }
+    }, 700);
+  }
 }

@@ -173,10 +173,8 @@ export function createGoblin(shirt: number): GnomeModel {
   return { root, legL, legR, armL, armR, mats, headTop: 1.4, hatTop: 1.75, headHalf: 0.3, hat: hatGroup, hatHeight: HC, hatHalf: 0.24 };
 }
 
+/** Both sides are gnomes now. The hat is the team badge: red hats against blue caps. */
 export function createFighter(faction: Faction): GnomeModel {
-  if (faction === 'gnome') {
-    const shirts = [0x2f5fb0, 0x3d8a3d, 0xd88a2a, 0x7a3fa0, 0x2a8f8f, 0xb5527a];
-    return createGnome(shirts[Math.floor(Math.random() * shirts.length)], 0xc42b2b);
-  }
-  return createGoblin(GOBLIN_SHIRTS[Math.floor(Math.random() * GOBLIN_SHIRTS.length)]);
+  const shirts = [0x3d8a3d, 0xd88a2a, 0x7a3fa0, 0x2a8f8f, 0xb5527a, 0xe0d040];
+  return createGnome(shirts[Math.floor(Math.random() * shirts.length)], faction === 'gnome' ? 0xd42b2b : 0x2b5fe0);
 }

@@ -8,6 +8,7 @@ import { PEE, Status, type Combatant, type PeeKind, type PotionState, type Spati
 import { DROP_SPEED, GRAVITY, type PeeSystem } from './pee';
 import type { Zone, Zones } from './zones';
 import type { Pickup, Potions } from './potions';
+import type { Mount, Mounts, Rider } from './mounts';
 
 const HW = 0.3;
 const H = 1.4;
@@ -22,6 +23,7 @@ export interface FightCtx {
   pee: PeeSystem;
   zones: Zones;
   potions: Potions;
+  mounts: Mounts;
   fx: Effects;
   time: number;
   /** Where the camera is, so far-away fighters can be skipped when drawing. */
@@ -110,7 +112,7 @@ const org = new THREE.Vector3();
 
 let nextId = 1;
 
-export class Fighter implements Combatant {
+export class Fighter implements Rider {
   /** Set by the game once; lets hits and deaths reach the world. */
   static ctx: FightCtx | null = null;
   static onHurt: ((f: Fighter) => void) | null = null;
@@ -129,7 +131,11 @@ export class Fighter implements Combatant {
   bladder = 100;
   yaw = 0;
   peeing = false;
+  mount: Mount | null = null;
+  hitR2?: number;
+  hitH?: number;
   speedNow = 0;
+  stepAcc = 0;
   deadT = 0;
 
   private lite: Lite;
@@ -145,6 +151,9 @@ export class Fighter implements Combatant {
   private pathGz = 1e9;
   private repathT = 0;
   private potionGoal: Pickup | null = null;
+  private mountGoal: Mount | null = null;
+  private mountT = Math.random() * 6;
+  private mountWant = Math.random() < 0.8;
   private potionT = Math.random() * 4;
   private scanT = Math.random() * 0.3;
   private strafeDir = 1;
@@ -169,6 +178,10 @@ export class Fighter implements Combatant {
   }
 
   spawn(at: THREE.Vector3, yaw: number) {
+    if (this.mount) { this.mount.rider = null; this.mount = null; }
+    this.hitR2 = undefined;
+    this.hitH = undefined;
+    this.mountGoal = null;
     this.pos.copy(at);
     this.yaw = yaw;
     this.alive = true;
@@ -200,14 +213,35 @@ export class Fighter implements Combatant {
 
   hurt(amount: number, kind: PeeKind, from: Combatant | null) {
     if (!this.alive || this.protect > 0) return;
+    if (this.mount) { // the bug takes it
+      this.mount.damage(amount, kind, from);
+      if (from && !this.target && from.alive && from.team !== this.team) this.target = from;
+      return;
+    }
     this.hp -= amount;
     if (this.hp <= 0) { this.die(kind, from); return; }
     Fighter.onHurt?.(this);
     if (from && !this.target && from.alive && from.team !== this.team) this.target = from; // turn on whoever is peeing on us
   }
 
+  onDismount() {
+    this.protect = 1.2;
+    this.mountGoal = null;
+    this.mountWant = Math.random() < 0.5;
+  }
+
+  /** Walking speed, or the bug's. */
+  private get spd(): number {
+    return this.mount ? this.mount.def.speed : SPEED;
+  }
+
+  private get hw(): number {
+    return this.mount ? this.mount.def.hw : HW;
+  }
+
   dot(amount: number, kind: PeeKind, from: Combatant | null) {
     if (!this.alive || this.protect > 0) return;
+    if (this.mount) { this.mount.damage(amount, kind, from); return; }
     this.hp -= amount;
     if (this.hp <= 0) this.die(kind, from);
   }
@@ -327,7 +361,7 @@ export class Fighter implements Combatant {
     this.yaw += Math.max(-7 * dt, Math.min(7 * dt, wrapAngle(want - this.yaw)));
     const ally = t.team === this.team;
     const kind: PeeKind = this.potion?.kind ?? 'normal';
-    const speed = SPEED * this.status.speedMul;
+    const speed = this.spd * this.status.speedMul;
 
     // keep a comfortable distance and strafe a little
     let mx = 0;
@@ -359,12 +393,14 @@ export class Fighter implements Combatant {
       this.burstT = 1.4 + Math.random() * 1.6;
     }
     if (this.peeing && aimed) {
-      org.set(this.pos.x - Math.sin(this.yaw) * 0.45, 0.62, this.pos.z - Math.cos(this.yaw) * 0.45);
+      const m = this.mount;
+      const lift = m ? m.def.lift : 0;
+      org.set(this.pos.x - Math.sin(this.yaw) * (m ? 0.9 : 0.45), 0.62 + lift + (m ? 0.35 : 0), this.pos.z - Math.cos(this.yaw) * (m ? 0.9 : 0.45));
       const pitch = aimPitch(d, t.pos.y + 0.8 - org.y);
       const cp = Math.cos(pitch);
       dirV.set((dx / d) * cp, Math.sin(pitch), (dz / d) * cp);
-      c.pee.emit(this, org, dirV, kind, dt, 0.045);
-      this.bladder -= 16 * dt;
+      c.pee.emit(this, org, dirV, kind, dt, m ? m.def.spread : 0.045, m ? m.def.rate : 1);
+      this.bladder -= 16 * dt * (m ? m.def.drain : 1);
     }
   }
 
@@ -401,14 +437,29 @@ export class Fighter implements Combatant {
     }
     if (this.potionGoal && !this.potionGoal.active) this.potionGoal = null;
 
-    const gx = this.potionGoal ? this.potionGoal.pos.x : zone.x + this.wx;
-    const gz = this.potionGoal ? this.potionGoal.pos.z : zone.z + this.wz;
+    // hop on a giant bug if one is standing around nearby
+    this.mountT -= dt;
+    if (this.mountT <= 0) {
+      this.mountT = 3 + Math.random() * 4;
+      if (!this.mount && this.mountWant) this.mountGoal = c.mounts.nearestFree(this.pos.x, this.pos.z, 30);
+    }
+    if (this.mountGoal && (this.mount || !this.mountGoal.alive || this.mountGoal.rider)) this.mountGoal = null;
+    if (this.mountGoal && Math.hypot(this.mountGoal.pos.x - this.pos.x, this.mountGoal.pos.z - this.pos.z) < 2) {
+      c.mounts.board(this.mountGoal, this);
+      this.mountGoal = null;
+      this.path = [];
+    }
+
+    const goal = this.mountGoal ?? this.potionGoal;
+    const gx = goal ? goal.pos.x : zone.x + this.wx;
+    const gz = goal ? goal.pos.z : zone.z + this.wz;
     const dxg = gx - this.pos.x;
     const dzg = gz - this.pos.z;
     const dg = Math.hypot(dxg, dzg) || 0.01;
     const mul = this.status.speedMul;
+    const SPEED = this.spd;
 
-    const inZone = !this.potionGoal && Math.hypot(this.pos.x - zone.x, this.pos.z - zone.z) < zone.radius * 0.8;
+    const inZone = !goal && Math.hypot(this.pos.x - zone.x, this.pos.z - zone.z) < zone.radius * 0.8;
     if (inZone) {
       // loiter inside the zone: that's what captures it
       this.wanderT -= dt;
@@ -456,8 +507,8 @@ export class Fighter implements Combatant {
     az /= l;
     const bx = this.pos.x;
     const bz = this.pos.z;
-    c.world.moveAxis(this.pos, HW, H, 'x', ax * speed * dt);
-    c.world.moveAxis(this.pos, HW, H, 'z', az * speed * dt);
+    c.world.moveAxis(this.pos, this.hw, H, 'x', ax * speed * dt);
+    c.world.moveAxis(this.pos, this.hw, H, 'z', az * speed * dt);
     this.pos.x = Math.max(-HALF + 3, Math.min(HALF - 3, this.pos.x));
     this.pos.z = Math.max(-HALF + 3, Math.min(HALF - 3, this.pos.z));
     const moved = Math.hypot(this.pos.x - bx, this.pos.z - bz);
@@ -485,15 +536,15 @@ export class Fighter implements Combatant {
       const d = Math.hypot(dx, dz);
       if (d < 0.8 && d > 0.001) {
         const push = (0.8 - d) * 3 * dt;
-        c.world.moveAxis(this.pos, HW, H, 'x', (dx / d) * push);
-        c.world.moveAxis(this.pos, HW, H, 'z', (dz / d) * push);
+        c.world.moveAxis(this.pos, this.hw, H, 'x', (dx / d) * push);
+        c.world.moveAxis(this.pos, this.hw, H, 'z', (dz / d) * push);
       }
     }
   }
 
   private animate(dt: number) {
     this.walkPhase += this.speedNow * dt * 2.4;
-    const swing = Math.sin(this.walkPhase) * Math.min(1, this.speedNow / 3) * 0.9;
+    const swing = this.mount ? 0 : Math.sin(this.walkPhase) * Math.min(1, this.speedNow / 3) * 0.9;
     this.lite.legL.rotation.x = swing;
     this.lite.legR.rotation.x = -swing;
     const lean = this.peeing ? 0.3 : 0; // hips forward, proud stance
@@ -514,6 +565,7 @@ export class Fighter implements Combatant {
 
   private sync() {
     this.group.position.copy(this.pos);
+    if (this.mount) this.group.position.y += this.mount.def.lift;
     if (this.alive) this.group.rotation.y = this.yaw;
     if (this.shown) {
       const v = Fighter.ctx!.viewer;

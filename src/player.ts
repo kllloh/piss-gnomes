@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { World } from './world';
-import { Status, type Combatant, type PeeKind, type PotionState } from './combat';
+import type { Combatant } from './combat';
+import { Status, type PeeKind, type PotionState } from './combat';
+import type { Mount, Rider } from './mounts';
 
 export const PLAYER_HW = 0.3;
 export const PLAYER_H = 1.75;
@@ -9,9 +11,8 @@ export const EYE = 1.6;
 const GRAVITY = 24;
 const JUMP = 7.5;
 const RUN = 5.6;
-const WALK = 2.8;
 
-export class Player implements Combatant {
+export class Player implements Rider {
   readonly id = -1;
   readonly name = 'You';
   readonly isPlayer = true;
@@ -34,6 +35,10 @@ export class Player implements Combatant {
   protect = 0;
   lastFrom: Combatant | null = null;
   lastKind: PeeKind = 'normal';
+  mount: Mount | null = null;
+  hitR2?: number;
+  hitH?: number;
+  roll = 0; // psychedelic camera sway, set by the game
   private keys = new Set<string>();
 
   constructor(private world: World, readonly camera: THREE.PerspectiveCamera) {
@@ -48,7 +53,7 @@ export class Player implements Combatant {
   }
 
   eyePos(out = new THREE.Vector3()): THREE.Vector3 {
-    return out.set(this.pos.x, this.pos.y + EYE, this.pos.z);
+    return out.set(this.pos.x, this.pos.y + EYE + (this.mount?.def.lift ?? 0), this.pos.z);
   }
 
   look(dx: number, dy: number) {
@@ -57,8 +62,19 @@ export class Player implements Combatant {
     this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - dy * 0.0022));
   }
 
+  onDismount() {
+    this.protect = 1.2;
+    this.vel.y = 5;
+    this.onGround = false;
+  }
+
   hurt(amount: number, kind: PeeKind, from: Combatant | null) {
     if (!this.alive || this.protect > 0) return;
+    if (this.mount) { // the bug takes it
+      this.hurtFlash = Math.min(1, this.hurtFlash + 0.12);
+      this.mount.damage(amount, kind, from);
+      return;
+    }
     this.hp -= amount;
     this.lastKind = kind;
     this.hurtFlash = Math.min(1, this.hurtFlash + 0.25);
@@ -68,6 +84,7 @@ export class Player implements Combatant {
 
   dot(amount: number, kind: PeeKind, from: Combatant | null) {
     if (!this.alive || this.protect > 0) return;
+    if (this.mount) { this.mount.damage(amount, kind, from); return; }
     this.hp -= amount;
     this.lastKind = kind;
     this.hurtFlash = Math.max(this.hurtFlash, 0.12);
@@ -95,6 +112,9 @@ export class Player implements Combatant {
     this.potion = null;
     this.bladder = 100;
     this.protect = 2.5;
+    this.mount = null;
+    this.hitR2 = undefined;
+    this.hitH = undefined;
     this.yaw = yaw;
     this.pitch = 0;
     this.camera.rotation.z = 0;
@@ -119,7 +139,8 @@ export class Player implements Combatant {
     let wz = -cos * f - sin * s;
     const len = Math.hypot(wx, wz);
     if (len > 0) { wx /= len; wz /= len; }
-    const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? WALK : RUN) * this.status.speedMul;
+    const run = this.mount ? this.mount.def.speed : RUN;
+    const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? run * 0.5 : run) * this.status.speedMul;
     const accel = this.onGround ? 55 : 9;
     const stepX = accel * dt;
     this.vel.x += Math.max(-stepX, Math.min(stepX, wx * speed - this.vel.x));
@@ -130,14 +151,15 @@ export class Player implements Combatant {
       this.onGround = false;
     }
 
+    const hw = this.mount ? this.mount.def.hw : PLAYER_HW;
     const steps = Math.max(1, Math.ceil(dt / 0.01));
     const h = dt / steps;
     for (let i = 0; i < steps; i++) {
       this.vel.y = Math.max(-30, this.vel.y - GRAVITY * h);
-      if (this.world.moveAxis(this.pos, PLAYER_HW, PLAYER_H, 'x', this.vel.x * h)) this.vel.x = 0;
-      if (this.world.moveAxis(this.pos, PLAYER_HW, PLAYER_H, 'z', this.vel.z * h)) this.vel.z = 0;
+      if (this.world.moveAxis(this.pos, hw, PLAYER_H, 'x', this.vel.x * h)) this.vel.x = 0;
+      if (this.world.moveAxis(this.pos, hw, PLAYER_H, 'z', this.vel.z * h)) this.vel.z = 0;
       this.onGround = false;
-      if (this.world.moveAxis(this.pos, PLAYER_HW, PLAYER_H, 'y', this.vel.y * h)) {
+      if (this.world.moveAxis(this.pos, hw, PLAYER_H, 'y', this.vel.y * h)) {
         if (this.vel.y < 0) this.onGround = true;
         this.vel.y = 0;
       }
@@ -151,9 +173,9 @@ export class Player implements Combatant {
 
   private applyCamera() {
     const drop = this.alive ? 0 : Math.min(1.3, this.deathT * 3);
-    this.camera.position.set(this.pos.x, this.pos.y + EYE - drop, this.pos.z);
+    this.camera.position.set(this.pos.x, this.pos.y + EYE + (this.mount?.def.lift ?? 0) - drop, this.pos.z);
     this.camera.rotation.y = this.yaw + (Math.random() - 0.5) * 0.06 * this.shake;
     this.camera.rotation.x = this.pitch + (Math.random() - 0.5) * 0.06 * this.shake;
-    this.camera.rotation.z = this.alive ? 0 : Math.min(1.2, this.deathT * 2);
+    this.camera.rotation.z = this.alive ? this.roll : Math.min(1.2, this.deathT * 2);
   }
 }

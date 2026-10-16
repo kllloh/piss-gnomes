@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Piddle Wars: The Enchanted Forest</title>
+<title>Piss Gnomes: The Enchanted Forest</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; font-family: monospace; color: #fff; user-select: none; }
   canvas { display: block; }
@@ -28,7 +28,14 @@
   #hit { position: fixed; inset: 0; box-shadow: inset 0 0 120px 30px rgba(220,0,0,0.0); pointer-events: none; transition: box-shadow 0.3s; }
   #hitmarker { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 34px; opacity: 0; pointer-events: none; text-shadow: 0 0 3px #000; }
   #overlay { position: fixed; inset: 0; background: rgba(5,8,22,0.78); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer; overflow-y: auto; }
-  #overlay h1 { font-size: 46px; margin: 0 0 4px; }
+  #overlay h1 { font-size: 58px; margin: 0 0 4px; letter-spacing: 4px; background: linear-gradient(90deg, #ff3cac, #ffe53c, #3cff9e, #3cb4ff, #b43cff, #ff3cac); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rainbow 5s linear infinite; filter: drop-shadow(0 0 10px rgba(255,120,255,.6)); }
+  @keyframes rainbow { to { background-position: 300% 0; } }
+  #overlay { background: linear-gradient(120deg, rgba(40,5,60,.82), rgba(5,40,60,.82), rgba(60,10,40,.82)); background-size: 300% 300%; animation: bgdrift 12s ease infinite; }
+  @keyframes bgdrift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  #meters { animation: glow 3s ease-in-out infinite alternate; }
+  @keyframes glow { from { box-shadow: 0 0 8px rgba(255,60,200,.5); } to { box-shadow: 0 0 16px rgba(60,200,255,.6); } }
+  #mountinfo { position: fixed; left: 18px; bottom: 150px; width: 300px; padding: 8px 14px; pointer-events: none; font-size: 15px; display: none; border-color: rgba(255,64,160,.6); }
+  #prompt { position: fixed; left: 0; right: 0; top: 62%; text-align: center; font-size: 22px; pointer-events: none; display: none; text-shadow: 0 0 6px #000, 0 0 12px #f0f; }
   #overlay .sub { color: #9fc4ff; margin-bottom: 8px; }
   #overlay p { margin: 4px 0; color: #ccc; }
   .faction-card { padding: 14px 22px; border: 2px solid #666; background: rgba(255,255,255,0.06); border-radius: 6px; line-height: 1.6; min-width: 200px; }
@@ -50,22 +57,26 @@
   <div class="bar"><div id="bladderfill" class="fill"></div></div>
   <div id="hp">♥ 100</div>
 </div>
+<div id="mountinfo" class="glass"></div>
+<div id="prompt"></div>
 <div id="stats"></div>
 <div id="hit"></div>
 <div id="hitmarker">✕</div>
 <div id="banner"></div>
 <div id="respawn"></div>
 <div id="overlay">
-  <h1>PIDDLE WARS</h1>
-  <div class="sub">The Enchanted Forest · 50 v 50 · capture the zones</div>
+  <h1>PISS GNOMES</h1>
+  <div class="sub">The Enchanted Forest · 50 v 50 · ride giant bugs · capture the zones</div>
   <p id="msg">Pick a side, then click to play</p>
   <div style="display:flex;gap:20px;margin:14px 0">
-    <div class="faction-card" data-f="gnome"><b style="color:#ff7a7a">GNOMES</b><br>Red hats, rosy cheeks.<br>Defend the garden.</div>
-    <div class="faction-card" data-f="goblin"><b style="color:#8fe06a">GOBLINS</b><br>Green, grubby, gleeful.<br>Raid the garden.</div>
+    <div class="faction-card" data-f="gnome"><b style="color:#ff7a7a">RED HATS</b><br>Posh, pointy and proud.<br>Defend the garden.</div>
+    <div class="faction-card" data-f="goblin"><b style="color:#7ab4ff">BLUE CAPS</b><br>Gruff, grubby, gleeful.<br>Raid the garden.</div>
   </div>
   <p>Your only weapon is your bladder. Grab potions to change what comes out:</p>
   <div class="legend" id="legend"></div>
-  <p>WASD move · Space jump · Shift walk · Mouse aim (aim up for range!) · Hold click to pee · Esc pause</p>
+  <p>Giant <b style="color:#ff60e0">spiders, beetles and ladybugs</b> wander the forest. Walk up and press <b>E</b> to ride one: it has a pee cannon and soaks up the damage for you.</p>
+  <p>WASD move · Space jump · Shift walk · Mouse aim (aim up for range!) · Hold click to pee · E ride / hop off · Esc pause</p>
+  <p>M voices · N music · T trip level (full / mild / off). Flashing colours and warping: turn it down with T if that bothers you.</p>
   <p>Stand in a zone to capture it. Hold more zones than the enemy and their tickets drain. Deaths cost a ticket too.</p>
 </div>
 <script>

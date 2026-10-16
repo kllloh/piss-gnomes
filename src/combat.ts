@@ -43,6 +43,9 @@ export interface Combatant {
   maxHp: number;
   potion: PotionState | null;
   bladder: number;
+  /** Wider/taller hit box while riding a bug (squared radius, height). */
+  hitR2?: number;
+  hitH?: number;
   /** Direct hit: reacts and may alert. */
   hurt(amount: number, kind: PeeKind, from: Combatant | null): void;
   /** Burning, acid and poison ticks: quiet. */
