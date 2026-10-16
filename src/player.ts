@@ -39,6 +39,7 @@ export class Player implements Rider {
   hitR2?: number;
   hitH?: number;
   gravityMul = 1; // chaos events
+  sens = 1; // mouse sensitivity, lower when scoped
   roll = 0; // psychedelic camera sway, set by the game
   private keys = new Set<string>();
 
@@ -59,8 +60,8 @@ export class Player implements Rider {
 
   look(dx: number, dy: number) {
     if (!this.alive) return;
-    this.yaw -= dx * 0.0022;
-    this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - dy * 0.0022));
+    this.yaw -= dx * 0.0022 * this.sens;
+    this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - dy * 0.0022 * this.sens));
   }
 
   onDismount() {

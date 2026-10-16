@@ -29,6 +29,10 @@ npm run build      # single self-contained dist/index.html you can double-click
   - Plain pee makes enemies **wet**, which is what makes fire weak and shock/frost strong.
 - **Zones:** there are seven. Stand in one to capture it; the more of you, the faster. The side holding more zones
   drains the other's tickets, and every death costs a ticket. Run the other side out of tickets to win.
+- **Weapon crates:** glowing crates around the forest (they come back after 45 s). **Piss Jugs** are grenades (G to lob,
+  up to 6). The **Piss Sniper** (2, right-click to zoom) fires an instant beam: 85 damage, more for headshots, 8 shots.
+  The **Piss Launcher** (3) fires big slow pee-balls with a splash, 5 shots. 1 goes back to your bladder, Q cycles. Your
+  current potion changes what the blast does, and bots pick up and use all of it too.
 - **Bugs:** Disco Spider (fast, twin cannons), Tank Beetle (slow, tough, shotgun-style cannons), Zoom Ladybug (very
   fast, fragile). Press **E** next to one to ride it; while you ride, the bug takes the damage. Bots ride them too, and
   popped bugs come back after 40 seconds.
@@ -39,7 +43,7 @@ npm run build      # single self-contained dist/index.html you can double-click
 - **Art:** soft, pillowy, cel-shaded shapes with a painted colour wash, in an 80s neon UI (Monoton and Audiowide fonts). **H** turns the painted wash off.
 - **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. **T** cycles full / mild / off.
 - **Controls:** WASD move, Space jump, Shift walk, mouse aim, hold click to pee, E ride / hop off, Esc pause,
-  M voices, N music, T trip level.
+  M voices, N music, T trip level, G jug, 1/2/3/Q weapons.
 
 ## Code map
 

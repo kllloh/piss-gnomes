@@ -38,6 +38,11 @@
   @keyframes glow { from { box-shadow: 0 0 8px rgba(255,60,200,.5); } to { box-shadow: 0 0 16px rgba(60,200,255,.6); } }
   #mountinfo { position: fixed; left: 18px; bottom: 150px; width: 300px; padding: 8px 14px; pointer-events: none; font-size: 15px; display: none; border-color: rgba(255,64,160,.6); }
   #chatter { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); max-width: 60vw; padding: 8px 18px; font-size: 20px; text-align: center; opacity: 0; transition: opacity .25s; pointer-events: none; text-shadow: 0 0 4px #000; background: rgba(8,12,28,.6); border-radius: 8px; }
+  #scope { position: fixed; inset: 0; pointer-events: none; display: none; background: radial-gradient(circle at center, transparent 0, transparent 24vmin, #05020c 24.4vmin); }
+  #scope::before, #scope::after { content: ''; position: absolute; background: rgba(25,227,255,.8); box-shadow: 0 0 6px #19e3ff; }
+  #scope::before { left: 50%; top: calc(50% - 24vmin); width: 1px; height: 48vmin; }
+  #scope::after { top: 50%; left: calc(50% - 24vmin); height: 1px; width: 48vmin; }
+  #weaponline { margin-top: 4px; font-size: 13px; }
   #prompt { position: fixed; left: 0; right: 0; top: 62%; text-align: center; font-size: 22px; pointer-events: none; display: none; text-shadow: 0 0 6px #000, 0 0 12px #f0f; }
   #overlay .sub { color: #ff7af0; text-shadow: 0 0 8px #ff2bd6; margin-bottom: 8px; }
   #overlay p { margin: 4px 0; color: #bff6ff; }
@@ -59,9 +64,11 @@
   <div>Bladder</div>
   <div class="bar"><div id="bladderfill" class="fill"></div></div>
   <div id="hp">♥ 100</div>
+  <div id="weaponline"></div>
 </div>
 <div id="mountinfo" class="glass"></div>
 <div id="prompt"></div>
+<div id="scope"></div>
 <div id="chatter"></div>
 <div id="stats"></div>
 <div id="hit"></div>
@@ -80,6 +87,7 @@
   <div class="legend" id="legend"></div>
   <p>Keep an eye out for <b style="color:#ffd070">Rory</b>. He is big. He is blond. He cannot be killed. Say hello.</p>
   <p>Giant <b style="color:#ff60e0">spiders, beetles and ladybugs</b> wander the forest. Walk up and press <b>E</b> to ride one: it has a pee cannon and soaks up the damage for you.</p>
+  <p><b style="color:#f2d83a">Weapon crates</b> are scattered about: <b>Piss Jugs</b> (grenades, G), the <b style="color:#19e3ff">Piss Sniper</b> (2, right-click to zoom) and the <b style="color:#ff2bd6">Piss Launcher</b> (3). Q cycles weapons, 1 is your bladder.</p>
   <p>WASD move · Space jump · Shift walk · Mouse aim (aim up for range!) · Hold click to pee · E ride / hop off · Esc pause</p>
   <p>V shout · M voices · N music · T trip level (full / mild / off) · H painted look on/off. Every minute or so the forest goes properly feral: moon gravity, rainbow rain, titan gnomes...</p>
   <p> Flashing colours and warping: turn it down with T if that bothers you.</p>

@@ -11,6 +11,7 @@ import type { Zone, Zones } from './zones';
 import type { Pickup, Potions } from './potions';
 import type { Mount, Mounts, Rider } from './mounts';
 import type { SayCtx } from './talk';
+import { JUG_SPEED, ROCKET_SPEED, type PickupType, type WeaponPickup, type Weapons, type WeaponPickups } from './weapons';
 
 const HW = 0.3;
 const H = 1.4;
@@ -26,6 +27,8 @@ export interface FightCtx {
   zones: Zones;
   potions: Potions;
   mounts: Mounts;
+  weapons: Weapons;
+  pickups: WeaponPickups;
   fx: Effects;
   time: number;
   /** Where the camera is, so far-away fighters can be skipped when drawing. */
@@ -99,8 +102,8 @@ function wrapAngle(a: number): number {
 }
 
 /** Elevation that lands a stream on a target `dy` higher and `d` away (low arc). */
-function aimPitch(d: number, dy: number): number {
-  const v2 = DROP_SPEED * DROP_SPEED;
+function aimPitch(d: number, dy: number, speed = DROP_SPEED): number {
+  const v2 = speed * speed;
   const disc = v2 * v2 - GRAVITY * (GRAVITY * d * d + 2 * dy * v2);
   if (disc < 0) return Math.PI / 4;
   return Math.atan((v2 - Math.sqrt(disc)) / (GRAVITY * d));
@@ -158,6 +161,12 @@ export class Fighter implements Rider {
   private repathT = 0;
   private potionGoal: Pickup | null = null;
   private mountGoal: Mount | null = null;
+  private weaponGoal: WeaponPickup | null = null;
+  private weaponT = Math.random() * 5;
+  private weaponCd = 2;
+  ammoSniper = 0;
+  ammoLauncher = 0;
+  jugs = 0;
   private mountT = Math.random() * 6;
   private mountWant = Math.random() < 0.8;
   private potionT = Math.random() * 4;
@@ -188,6 +197,8 @@ export class Fighter implements Rider {
     this.hitR2 = undefined;
     this.hitH = undefined;
     this.mountGoal = null;
+    this.weaponGoal = null;
+    this.ammoSniper = this.ammoLauncher = this.jugs = 0;
     this.pos.copy(at);
     this.yaw = yaw;
     this.alive = true;
@@ -211,6 +222,13 @@ export class Fighter implements Rider {
     this.tinted = false;
     this.goalT = 0;
     this.sync();
+  }
+
+  /** Picked up a weapon crate. */
+  give(type: PickupType, amount: number) {
+    if (type === 'jug') this.jugs = Math.min(6, this.jugs + amount);
+    else if (type === 'sniper') this.ammoSniper += amount;
+    else this.ammoLauncher += amount;
   }
 
   heal(n: number) {
@@ -334,7 +352,7 @@ export class Fighter implements Rider {
 
   private findTarget(c: FightCtx) {
     const healer = this.potion?.kind === 'heal';
-    c.grid.query(this.pos.x, this.pos.z, healer ? 18 : 34, cand);
+    c.grid.query(this.pos.x, this.pos.z, healer ? 18 : this.ammoSniper > 0 ? 60 : 34, cand);
     const scored: { t: Combatant; s: number }[] = [];
     for (const t of cand) {
       if (!t.alive || t === this || t.isNpc) continue;
@@ -381,9 +399,9 @@ export class Fighter implements Rider {
     let sp = speed;
     if (ally) {
       if (d > 5) { mx = dx / d; mz = dz / d; }
-    } else if (d > 15) {
+    } else if (d > (this.ammoSniper > 0 ? 50 : 15)) {
       mx = dx / d; mz = dz / d;
-    } else if (d < 7) {
+    } else if (d < (this.ammoSniper > 0 ? 24 : 7)) {
       mx = -dx / d; mz = -dz / d; sp = speed * 0.7;
     } else {
       this.strafeT -= dt;
@@ -413,6 +431,43 @@ export class Fighter implements Rider {
       dirV.set((dx / d) * cp, Math.sin(pitch), (dz / d) * cp);
       c.pee.emit(this, org, dirV, kind, dt, m ? m.def.spread : 0.045, m ? m.def.rate : 1);
       this.bladder -= 16 * dt * (m ? m.def.drain : 1);
+    }
+
+    // fancy weapons: jugs, the launcher and the sniper
+    this.weaponCd -= dt;
+    if (!ally && this.weaponCd <= 0 && aimed) {
+      const m = this.mount;
+      const lift = m ? m.def.lift : 0;
+      const ox = this.pos.x - Math.sin(this.yaw) * 0.5;
+      const oz = this.pos.z - Math.cos(this.yaw) * 0.5;
+      const wob = () => (Math.random() - 0.5) * 0.05;
+      if (this.ammoSniper > 0 && d > 20) {
+        org.set(ox, 1.0 + lift, oz);
+        const tx = t.pos.x - ox;
+        const ty = t.pos.y + 0.9 - org.y;
+        const tz = t.pos.z - oz;
+        const len = Math.hypot(tx, ty, tz) || 1;
+        dirV.set(tx / len + wob() * 0.4, ty / len + wob() * 0.4, tz / len + wob() * 0.4).normalize();
+        c.weapons.snipe(this, org, dirV, kind);
+        this.ammoSniper--;
+        this.weaponCd = 2.2 + Math.random() * 1.5;
+      } else if (this.ammoLauncher > 0 && d > 9 && d < 45) {
+        org.set(ox, 1.0 + lift, oz);
+        const pitch = aimPitch(d, t.pos.y + 0.8 - org.y, ROCKET_SPEED);
+        const cp = Math.cos(pitch);
+        dirV.set((dx / d) * cp + wob(), Math.sin(pitch), (dz / d) * cp + wob()).normalize();
+        c.weapons.fireLauncher(this, org, dirV, kind);
+        this.ammoLauncher--;
+        this.weaponCd = 2.5 + Math.random() * 1.5;
+      } else if (this.jugs > 0 && d > 8 && d < 22) {
+        org.set(ox, 1.0 + lift, oz);
+        const pitch = aimPitch(d, t.pos.y + 0.8 - org.y, JUG_SPEED);
+        const cp = Math.cos(pitch);
+        dirV.set((dx / d) * cp + wob(), Math.sin(pitch), (dz / d) * cp + wob()).normalize();
+        c.weapons.throwJug(this, org, dirV, kind);
+        this.jugs--;
+        this.weaponCd = 3 + Math.random() * 2;
+      }
     }
   }
 
@@ -463,7 +518,23 @@ export class Fighter implements Rider {
       this.path = [];
     }
 
-    const goal = this.mountGoal ?? this.potionGoal;
+    // spot a weapon crate we actually want
+    this.weaponT -= dt;
+    if (this.weaponT <= 0) {
+      this.weaponT = 4 + Math.random() * 4;
+      let best: WeaponPickup | null = null;
+      let bd = 32;
+      for (const p of c.pickups.list) {
+        if (!p.active) continue;
+        const wanted = p.type === 'jug' ? this.jugs < 3 : p.type === 'sniper' ? this.ammoSniper <= 0 : this.ammoLauncher <= 0;
+        const dd = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+        if (wanted && dd < bd) { bd = dd; best = p; }
+      }
+      this.weaponGoal = best;
+    }
+    if (this.weaponGoal && !this.weaponGoal.active) this.weaponGoal = null;
+
+    const goal = this.mountGoal ?? this.weaponGoal ?? this.potionGoal;
     const gx = goal ? goal.pos.x : zone.x + this.wx;
     const gz = goal ? goal.pos.z : zone.z + this.wz;
     const dxg = gx - this.pos.x;

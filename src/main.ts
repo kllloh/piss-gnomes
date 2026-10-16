@@ -14,6 +14,7 @@ import { Music } from './music';
 import { Trip } from './trip';
 import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } from './talk';
 import { Rory } from './rory';
+import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, type PickupType, type BlastSpec } from './weapons';
 import { Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
 
@@ -111,6 +112,28 @@ const mountSpots: MountSpot[] = [];
 }
 const mounts = new Mounts(scene, mountSpots);
 
+// weapons: thrown jugs, launched pee-balls, sniper beams, and crates of them to find
+const weapons = new Weapons(scene, world, grid);
+const freeNear = (x: number, z: number): THREE.Vector3 => {
+  for (let k = 0; k < 30; k++) {
+    const px = x + (Math.random() - 0.5) * 2 * (3 + k);
+    const pz = z + (Math.random() - 0.5) * 2 * (3 + k);
+    if (nav.isFreeAt(px, pz)) return new THREE.Vector3(px, 0, pz);
+  }
+  return new THREE.Vector3(x, 0, z);
+};
+const pickupSpots: { type: PickupType; pos: THREE.Vector3 }[] = [];
+{
+  const types: PickupType[] = ['jug', 'launcher', 'sniper', 'jug', 'sniper', 'launcher'];
+  let n = 0;
+  for (const side of [1, -1]) {
+    const b = side === 1 ? forest.baseSouth : forest.baseNorth;
+    for (let i = 0; i < 3; i++) pickupSpots.push({ type: types[n++ % types.length], pos: freeNear(b.x + (i - 1) * 8, b.z - side * 15) });
+  }
+  for (const z of forest.zones) for (let i = 0; i < 2; i++) pickupSpots.push({ type: types[n++ % types.length], pos: freeNear(z.x + (i ? -11 : 11), z.z + (i ? 8 : -8)) });
+}
+const pickups = new WeaponPickups(scene, pickupSpots);
+
 // Rory: big, blond, unkillable
 const rory = new Rory(scene, world, nav, (text) => {
   const sp = sound.spatial(rory.pos.x, rory.pos.z);
@@ -141,6 +164,8 @@ const elStats = $('stats');
 const elMount = $('mountinfo');
 const elPrompt = $('prompt');
 const elChatter = $('chatter');
+const elWeapon = $('weaponline');
+const elScope = $('scope');
 const mini = $('minimap') as HTMLCanvasElement;
 const miniCtx = mini.getContext('2d')!;
 
@@ -196,6 +221,7 @@ function buildFighters() {
     }
   }
   everyone = [player, ...fighters];
+  weapons.everyone = () => everyone;
 }
 
 // --- talking ---------------------------------------------------------------------------------------
@@ -270,6 +296,19 @@ let deaths = 0;
 let time = 0;
 let respawnT = 0;
 let playerWasAlive = true;
+type Wpn = 'pee' | 'sniper' | 'launcher';
+let weapon: Wpn = 'pee';
+let ammoSniper = 0;
+let ammoLauncher = 0;
+let jugs = 0;
+let fireCd = 0;
+let jugCd = 0;
+let zooming = false;
+function resetWeapons() {
+  weapon = 'pee';
+  ammoSniper = ammoLauncher = jugs = 0;
+  zooming = false;
+}
 let streak = 0;
 let idleT = 3;
 let fillerT = 40;
@@ -300,6 +339,9 @@ function newMatch() {
   deaths = 0;
   phase = 'play';
   endChaos();
+  resetWeapons();
+  weapons.clear();
+  pickups.reset();
   chaosIn = 45 + Math.random() * 30;
   streak = 0;
   warned50 = warned20 = false;
@@ -430,7 +472,7 @@ function registerKill(victim: Combatant, from: Combatant | null, kind: PeeKind) 
 
 // grid of who is where, rebuilt every frame
 const fightCtx: FightCtx = {
-  world, nav, grid, pee, zones, potions, mounts, fx, time: 0, viewer: camera.position,
+  world, nav, grid, pee, zones, potions, mounts, weapons, pickups, fx, time: 0, viewer: camera.position,
   onKill: (victim, from, kind) => registerKill(victim, from, kind),
   respawn: (f) => {
     const r = respawnPoint(f.team);
@@ -459,6 +501,112 @@ zones.onCapture = (z: Zone, owner) => {
   if (Math.random() < 0.7) announcer(mine ? 'capture' : 'lost');
 };
 
+const blastBuf: Combatant[] = [];
+
+weapons.onExplode = (pos, blast: BlastSpec, kind, shooter, rocket) => {
+  const col = PEE[kind].color;
+  fx.burst(pos, col, rocket ? 30 : 22, 8, 2);
+  fx.burst(pos, 0xffffff, 8, 5, 1.2);
+  fx.splat(new THREE.Vector3(pos.x, 0, pos.z), col, blast.radius * 0.55);
+  const sp = sound.spatial(pos.x, pos.z);
+  sound.boom(sp.vol, sp.pan);
+  sound.squelch(sp.vol, sp.pan);
+  const dp = Math.hypot(pos.x - player.pos.x, pos.z - player.pos.z);
+  if (dp < 30) player.shake = Math.max(player.shake, 1 - dp / 30);
+  grid.query(pos.x, pos.z, blast.radius, blastBuf);
+  for (const o of blastBuf) {
+    if (!o.alive) continue;
+    const d = Math.hypot(o.pos.x - pos.x, o.pos.y + 0.8 - pos.y, o.pos.z - pos.z);
+    if (d > blast.radius) continue;
+    const fall = 1 - d / blast.radius;
+    const friend = o.team === shooter.team && !o.isNpc;
+    if (kind === 'heal') { if (friend) o.heal(45 * fall + 5); continue; }
+    if (friend) continue; // no friendly fire
+    o.hurt(blast.dmg * (0.25 + 0.75 * fall), kind, shooter);
+    if (o.alive) applyHit(o, kind, shooter, pos);
+    if (shooter.isPlayer) marker(!o.alive);
+  }
+  for (const m of mounts.list) { // free bugs are fair game
+    if (!m.alive || m.rider) continue;
+    const d = Math.hypot(m.pos.x - pos.x, m.pos.z - pos.z);
+    if (d < blast.radius) m.damage(blast.dmg * (1 - d / blast.radius), kind, shooter);
+  }
+};
+
+weapons.onSnipe = (victim, head, at, kind, shooter) => {
+  fx.burst(at, PEE[kind].color, victim ? 10 : 6, 4, 1);
+  if (at.y < 0.3) fx.splat(new THREE.Vector3(at.x, 0, at.z), PEE[kind].color, 0.8);
+  if (!victim) return;
+  if (kind === 'heal') { victim.heal(45); return; }
+  victim.hurt(SNIPER_DMG * (head ? 1.7 : 1), kind, shooter);
+  if (victim.alive) applyHit(victim, kind, shooter, at);
+  if (shooter.isPlayer) {
+    marker(!victim.alive);
+    if (head && !victim.alive) banner('HEADSHOT!', 1);
+  }
+};
+
+weapons.onFire = (type, pos) => {
+  const sp = sound.spatial(pos.x, pos.z);
+  if (type === 'sniper') { sound.shot(sp.vol, sp.pan, true); sound.zap(sp.vol * 0.6, sp.pan); }
+  else if (type === 'launcher') sound.rocket(sp.vol, sp.pan);
+  else sound.whoosh(0.6 * sp.vol);
+};
+
+function giveWeapon(type: PickupType) {
+  const amount = PICKUP_INFO[type].amount;
+  if (type === 'jug') jugs = Math.min(6, jugs + amount);
+  else if (type === 'sniper') { ammoSniper += amount; weapon = 'sniper'; }
+  else { ammoLauncher += amount; weapon = 'launcher'; }
+}
+
+function selectWeapon(w: Wpn) {
+  if (w === 'sniper' && ammoSniper <= 0) return;
+  if (w === 'launcher' && ammoLauncher <= 0) return;
+  weapon = w;
+  if (w !== 'sniper') zooming = false;
+  sound.uiClick();
+}
+
+const wDir = new THREE.Vector3();
+const wOrigin = new THREE.Vector3();
+function throwPlayerJug() {
+  if (jugs <= 0 || jugCd > 0 || !player.alive || !locked || player.status.frozen > 0) return;
+  camera.updateMatrixWorld();
+  camera.getWorldDirection(wDir);
+  wDir.y += 0.2; // lob it
+  wDir.normalize();
+  player.eyePos(wOrigin).addScaledVector(wDir, 0.7);
+  weapons.throwJug(player, wOrigin, wDir, player.potion?.kind ?? 'normal');
+  jugs--;
+  jugCd = 0.6;
+}
+
+function playerWeapons(dt: number) {
+  fireCd = Math.max(0, fireCd - dt);
+  jugCd = Math.max(0, jugCd - dt);
+  if (!player.alive || player.status.frozen > 0) return;
+  camera.updateMatrixWorld();
+  camera.getWorldDirection(wDir);
+  const kind: PeeKind = player.potion?.kind ?? 'normal';
+  if (weapon === 'sniper' && firing && fireCd <= 0 && ammoSniper > 0) {
+    player.eyePos(wOrigin);
+    weapons.snipe(player, wOrigin, wDir, kind);
+    ammoSniper--;
+    fireCd = 1.1;
+    player.shake = Math.max(player.shake, 0.5);
+    if (ammoSniper <= 0) { weapon = 'pee'; zooming = false; banner('SNIPER EMPTY', 1.2); }
+  } else if (weapon === 'launcher' && firing && fireCd <= 0 && ammoLauncher > 0) {
+    player.eyePos(wOrigin).addScaledVector(wDir, 0.9);
+    wOrigin.y -= 0.15;
+    weapons.fireLauncher(player, wOrigin, wDir, kind);
+    ammoLauncher--;
+    fireCd = 0.85;
+    player.shake = Math.max(player.shake, 0.4);
+    if (ammoLauncher <= 0) { weapon = 'pee'; banner('LAUNCHER EMPTY', 1.2); }
+  }
+}
+
 mounts.onHurt = (m) => {
   const sp = sound.spatial(m.pos.x, m.pos.z);
   if (Math.random() < 0.35) sound.mountHit(sp.vol * 0.7, sp.pan);
@@ -480,8 +628,8 @@ mounts.onBreak = (m, rider, from) => {
 // --- input ---------------------------------------------------------------------------------------
 let locked = false;
 let firing = false;
-renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0) firing = true; });
-window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
+renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0) firing = true; if (e.button === 2 && weapon === 'sniper') zooming = true; });
+window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) zooming = false; });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousemove', (e) => { if (locked) player.look(e.movementX, e.movementY); });
 function toggleRide() {
@@ -506,6 +654,19 @@ function toggleRide() {
 }
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
+  if (e.code === 'KeyG' && !e.repeat) throwPlayerJug();
+  if (e.code === 'Digit1') selectWeapon('pee');
+  if (e.code === 'Digit2') selectWeapon('sniper');
+  if (e.code === 'Digit3') selectWeapon('launcher');
+  if (e.code === 'KeyQ' && !e.repeat) {
+    const order: Wpn[] = ['pee', 'sniper', 'launcher'];
+    for (let k = 1; k <= 3; k++) {
+      const w = order[(order.indexOf(weapon) + k) % 3];
+      if ((w === 'sniper' && ammoSniper <= 0) || (w === 'launcher' && ammoLauncher <= 0)) continue;
+      selectWeapon(w);
+      break;
+    }
+  }
   if (e.code === 'KeyV' && !e.repeat && locked && player.alive) playerSay('shout', 2);
   if (e.code === 'KeyT') {
     trip.level = (trip.level + 2) % 3; // 2 -> 1 -> 0 -> 2
@@ -605,14 +766,14 @@ function playerPee(dt: number) {
   player.eyePos(originV).addScaledVector(dirV, m ? 1.0 : 0.45);
   originV.y -= m ? 0.45 : 0.6;
   const aiming = player.alive && !stuck;
-  if (aiming && pee.landing(originV, dirV, world, landV)) {
+  if (aiming && weapon === 'pee' && pee.landing(originV, dirV, world, landV)) {
     marker3d.visible = true;
     marker3d.position.copy(landV);
     (marker3d.material as THREE.MeshBasicMaterial).color.setHex(PEE[kind].color);
   } else {
     marker3d.visible = false;
   }
-  const going = firing && aiming && !outOfPee && player.bladder > 0;
+  const going = firing && aiming && weapon === 'pee' && !outOfPee && player.bladder > 0;
   if (going) {
     pee.emit(player, originV, dirV, kind, dt, m ? m.def.spread * 0.4 : 0.012, m ? m.def.rate : 1);
     player.bladder = Math.max(0, player.bladder - 16 * dt * (m ? m.def.drain : 1));
@@ -657,6 +818,8 @@ function renderHud() {
   elBladder.style.background = col;
   elHp.textContent = `♥ ${Math.ceil(player.hp)}${player.status.burn > 0 ? ' 🔥' : ''}${player.status.chill > 0.2 ? ' ❄' : ''}${player.status.poison > 0 ? ' ☠' : ''}`;
   elStats.textContent = `Drenched ${kills} · Defeated ${deaths}`;
+  const wname = weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? `Piss Sniper ×${ammoSniper}` : `Piss Launcher ×${ammoLauncher}`;
+  elWeapon.textContent = `[${wname}]${jugs ? `  Jugs ×${jugs} (G)` : ''}${ammoSniper && weapon !== 'sniper' ? '  2: sniper' : ''}${ammoLauncher && weapon !== 'launcher' ? '  3: launcher' : ''}`;
   if (player.mount) {
     const m = player.mount;
     elMount.style.display = 'block';
@@ -692,6 +855,11 @@ function renderHud() {
     if (!p.active) continue;
     miniCtx.fillStyle = hex(PEE[p.kind].color);
     miniCtx.fillRect(mx(p.pos.x) - 1.5, mz(p.pos.z) - 1.5, 3, 3);
+  }
+  for (const p of pickups.list) {
+    if (!p.active) continue;
+    miniCtx.fillStyle = '#' + PICKUP_INFO[p.type].color.toString(16).padStart(6, '0');
+    miniCtx.fillRect(mx(p.pos.x) - 2, mz(p.pos.z) - 2, 4, 4);
   }
   miniCtx.fillStyle = '#ffd070';
   miniCtx.beginPath();
@@ -859,10 +1027,24 @@ function simulate(dt: number) {
     if (player.potion.t <= 0) player.potion = null;
   }
   playerPee(dt);
+  playerWeapons(dt);
   if (player.alive && player.hp < hpBefore - 0.5) sound.hurt();
 
   for (const f of fighters) f.update(dt, fightCtx);
   rory.update(dt, player);
+  weapons.update(dt);
+  pickups.update(dt, time, grid, (p, who) => {
+    const info = PICKUP_INFO[p.type];
+    if (who.isPlayer) {
+      giveWeapon(p.type);
+      banner(`${info.name.toUpperCase()}! ${info.blurb}`, 2.8);
+      sound.potion();
+      if (Math.random() < 0.6) playerSay('weapon');
+    } else if (who instanceof Fighter) {
+      who.give(p.type, info.amount);
+      fighterSay(who, 'weapon');
+    }
+  });
   mounts.update(dt, time);
   movementSounds(dt);
   pee.update(dt, {
@@ -887,6 +1069,7 @@ function simulate(dt: number) {
     deaths++;
     mounts.dismount(player);
     sound.cannon(false);
+    resetWeapons();
     registerKill(player, player.lastFrom, player.lastKind);
     respawnT = PLAYER_RESPAWN;
     banner(pick(['YOU WERE DRENCHED', 'WELL, THAT STINGS', 'RIP. THE FOREST IS UNIMPRESSED', 'SPLOOSH. YOU ARE DONE']), 2.2);
@@ -946,7 +1129,10 @@ function psychedelia(dt: number, vt: number, beat: number) {
   hemi.color.setHSL((vt * 0.02) % 1, 0.55, 0.72);
   hemi.groundColor.setHSL((vt * 0.02 + 0.5) % 1, 0.5, 0.26);
   moon.color.setHSL((vt * 0.03 + 0.6) % 1, 0.45, 0.82);
-  const fovTarget = 75 + (Math.sin(vt * 0.7) * 2 + beat * 2.5) * ampNow * lvl + (player.mount ? 6 : 0);
+  const scoped = zooming && weapon === 'sniper' && player.alive;
+  const fovTarget = scoped ? 22 : 75 + (Math.sin(vt * 0.7) * 2 + beat * 2.5) * ampNow * lvl + (player.mount ? 6 : 0);
+  player.sens = scoped ? 0.3 : 1;
+  elScope.style.display = scoped ? 'block' : 'none';
   fovNow += (fovTarget - fovNow) * Math.min(1, dt * 4);
   if (Math.abs(camera.fov - fovNow) > 0.01) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
   player.roll = (Math.sin(vt * 0.9) * 0.018 + Math.sin(vt * 0.37) * 0.012) * ampNow * lvl;
@@ -997,7 +1183,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
+  weapons, pickups, giveWeapon, resetWeapons, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   setFaction, newMatch, applyHit, respawnPoint, sim: simulate,
