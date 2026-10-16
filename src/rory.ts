@@ -4,9 +4,10 @@ import type { World } from './world';
 import type { NavGrid } from './nav';
 import type { Player } from './player';
 
-const SCALE = 1.6; // twice the size of a gnome (gnomes are 0.8)
-const HW = 0.65;
-const H = 2.4;
+const SCALE_XZ = 1.05; // thin
+const SCALE_Y = 2.1; // and very tall
+const HW = 0.45;
+const H = 3.1;
 const SPEED = 2.4;
 const GREET_DIST = 10;
 
@@ -20,7 +21,7 @@ export class Rory implements Combatant {
   readonly status = new Status();
   readonly pos = new THREE.Vector3();
   readonly group = new THREE.Group();
-  readonly hitR2 = 1.3;
+  readonly hitR2 = 0.8;
   readonly hitH = H;
   alive = true;
   hp = 9999;
@@ -87,7 +88,7 @@ export class Rory implements Combatant {
     mk(root, 0.06, 0.24, 0.48, -0.24, 1.28, 0, BLOND); // sides
     mk(root, 0.06, 0.24, 0.48, 0.24, 1.28, 0, BLOND);
     mk(root, 0.48, 0.26, 0.06, 0, 1.28, 0.24, BLOND); // back
-    root.scale.setScalar(SCALE);
+    root.scale.set(SCALE_XZ, SCALE_Y, SCALE_XZ);
     this.group.add(root);
     scene.add(this.group);
   }
