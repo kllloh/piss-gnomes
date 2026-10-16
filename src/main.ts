@@ -14,6 +14,7 @@ import { Music } from './music';
 import { Trip } from './trip';
 import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } from './talk';
 import { Rory } from './rory';
+import { initTouch, isTouchDevice } from './touch';
 import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, type PickupType, type BlastSpec } from './weapons';
 import { Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
@@ -568,6 +569,16 @@ function selectWeapon(w: Wpn) {
   sound.uiClick();
 }
 
+function cycleWeapon() {
+  const order: Wpn[] = ['pee', 'sniper', 'launcher'];
+  for (let k = 1; k <= 3; k++) {
+    const w = order[(order.indexOf(weapon) + k) % 3];
+    if ((w === 'sniper' && ammoSniper <= 0) || (w === 'launcher' && ammoLauncher <= 0)) continue;
+    selectWeapon(w);
+    break;
+  }
+}
+
 const wDir = new THREE.Vector3();
 const wOrigin = new THREE.Vector3();
 function throwPlayerJug() {
@@ -658,15 +669,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Digit1') selectWeapon('pee');
   if (e.code === 'Digit2') selectWeapon('sniper');
   if (e.code === 'Digit3') selectWeapon('launcher');
-  if (e.code === 'KeyQ' && !e.repeat) {
-    const order: Wpn[] = ['pee', 'sniper', 'launcher'];
-    for (let k = 1; k <= 3; k++) {
-      const w = order[(order.indexOf(weapon) + k) % 3];
-      if ((w === 'sniper' && ammoSniper <= 0) || (w === 'launcher' && ammoLauncher <= 0)) continue;
-      selectWeapon(w);
-      break;
-    }
-  }
+  if (e.code === 'KeyQ' && !e.repeat) cycleWeapon();
   if (e.code === 'KeyV' && !e.repeat && locked && player.alive) playerSay('shout', 2);
   if (e.code === 'KeyT') {
     trip.level = (trip.level + 2) % 3; // 2 -> 1 -> 0 -> 2
@@ -687,11 +690,13 @@ window.addEventListener('keydown', (e) => {
   }
 });
 let fallback = false;
+const touchMode = isTouchDevice();
+let touchGoFull: (() => void) | null = null;
 function setRunning(on: boolean) {
   locked = on;
   if (on && firstMatch) { firstMatch = false; setTimeout(() => announcer('start'), 900); }
   elOverlay.style.display = on ? 'none' : 'flex';
-  if (!on) { firing = false; sound.pee(false); elMsg.textContent = 'Paused — click to resume'; }
+  if (!on) { firing = false; player.moveX = player.moveY = 0; player.jumpHeld = false; sound.pee(false); elMsg.textContent = 'Paused — click to resume'; }
 }
 function startFallback() {
   if (locked) return;
@@ -702,6 +707,11 @@ elOverlay.addEventListener('click', () => {
   sound.init();
   music.start();
   sound.ambient(true);
+  if (touchMode) { // no pointer lock on touch screens: go straight in
+    touchGoFull?.();
+    startFallback();
+    return;
+  }
   try {
     const r = renderer.domElement.requestPointerLock() as unknown as Promise<void> | undefined;
     r?.catch?.(() => startFallback());
@@ -1173,6 +1183,30 @@ function tick() {
 
   sound.setListener(camera.position.x, camera.position.z, camera.rotation.y);
   trip.render(scene, camera, vt, ampNow, beat, tintNow);
+}
+
+if (touchMode) {
+  const t = initTouch({
+    look: (dx, dy) => { if (locked) player.look(dx, dy); },
+    move: (x, y) => { player.moveX = x; player.moveY = y; },
+    jump: (v) => { player.jumpHeld = v; },
+    fire: (v) => { firing = v; },
+    zoom: (v) => { zooming = v && weapon === 'sniper'; },
+    ride: toggleRide,
+    jug: throwPlayerJug,
+    cycleWeapon,
+    shout: () => { if (locked && player.alive) playerSay('shout', 2); },
+    pause: () => { fallback = false; setRunning(false); },
+    status: () => ({
+      weapon: weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? 'Piss Sniper' : 'Piss Launcher',
+      jugs,
+      sniper: weapon === 'sniper',
+      riding: !!player.mount,
+      canRide: !!mounts.nearestFree(player.pos.x, player.pos.z, 3.6),
+      running: locked,
+    }),
+  });
+  touchGoFull = t.goFull;
 }
 
 applyTeamColors();

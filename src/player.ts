@@ -40,6 +40,9 @@ export class Player implements Rider {
   hitH?: number;
   gravityMul = 1; // chaos events
   sens = 1; // mouse sensitivity, lower when scoped
+  moveX = 0; // touch stick, -1..1
+  moveY = 0;
+  jumpHeld = false; // touch jump button
   roll = 0; // psychedelic camera sway, set by the game
   private keys = new Set<string>();
 
@@ -133,14 +136,14 @@ export class Player implements Rider {
   private move(dt: number) {
     const stuck = this.frozen || this.status.frozen > 0; // frozen solid: no steering
     const k = stuck ? new Set<string>() : this.keys;
-    const f = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
-    const s = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+    const f = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0) + (stuck ? 0 : this.moveY);
+    const s = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) + (stuck ? 0 : this.moveX);
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     let wx = -sin * f + cos * s;
     let wz = -cos * f - sin * s;
     const len = Math.hypot(wx, wz);
-    if (len > 0) { wx /= len; wz /= len; }
+    if (len > 1) { wx /= len; wz /= len; } // (a half-pushed stick walks slower)
     const run = this.mount ? this.mount.def.speed : RUN;
     const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? run * 0.5 : run) * this.status.speedMul;
     const accel = this.onGround ? 55 : 9;
@@ -148,7 +151,7 @@ export class Player implements Rider {
     this.vel.x += Math.max(-stepX, Math.min(stepX, wx * speed - this.vel.x));
     this.vel.z += Math.max(-stepX, Math.min(stepX, wz * speed - this.vel.z));
 
-    if (this.onGround && k.has('Space')) {
+    if (this.onGround && (k.has('Space') || (!stuck && this.jumpHeld))) {
       this.vel.y = JUMP;
       this.onGround = false;
     }
