@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { toon } from './organic';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createFighter, type Faction } from './gnome';
 import type { World } from './world';
@@ -79,7 +80,7 @@ function makeLite(faction: Faction): Lite {
   const groups: THREE.Group[] = [model.legL, model.legR];
   const geos = groups.map((g) => bake(root, g, isGun));
   const bodyGeo = bake(root, root, isGun, new Set<THREE.Object3D>(groups));
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = toon({ vertexColors: true });
   for (const c of root.children.slice()) if (!groups.includes(c as THREE.Group)) root.remove(c);
   groups.forEach((g, i) => {
     g.clear();

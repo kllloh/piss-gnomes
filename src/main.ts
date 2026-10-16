@@ -511,6 +511,10 @@ window.addEventListener('keydown', (e) => {
     trip.level = (trip.level + 2) % 3; // 2 -> 1 -> 0 -> 2
     banner(['TRIP: OFF (BORING)', 'TRIP: MILD', 'TRIP: FULL SEND'][trip.level], 1.2);
   }
+  if (e.code === 'KeyH') {
+    trip.ink = trip.ink > 0 ? 0 : 1;
+    banner(trip.ink > 0 ? 'ART: HAND-DRAWN' : 'ART: SMOOTH', 1.2);
+  }
   if (e.code === 'KeyN') {
     music.setEnabled(!music.on);
     banner(music.on ? 'MUSIC ON' : 'MUSIC OFF', 1);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SoftBox } from './organic';
 import type { World } from './world';
 import type { Combatant } from './combat';
 import type { ZoneDef } from './forest';
@@ -38,10 +39,10 @@ export class Zones {
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28, depthWrite: false }),
       );
       disc.position.set(d.x, 0.05, d.z);
-      const beacon = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      const beacon = new THREE.Mesh(new SoftBox(1.2, 1.2, 1.2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
       beacon.position.set(d.x, 2.3, d.z);
       const pillar = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 40, 0.5),
+        new SoftBox(0.5, 40, 0.5),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }),
       );
       pillar.position.set(d.x, 20, d.z);

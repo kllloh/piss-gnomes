@@ -36,6 +36,7 @@ npm run build      # single self-contained dist/index.html you can double-click
   generative music engine that plays weird scales in odd time signatures. The scale changes with your potion.
 - **Rory:** a huge, blond, bowl-cut NPC (twice a gnome's size) who wanders the forest and cannot be killed. Get close and he says "Me Rory".
 - **Talking:** everyone never shuts up: gnomes shout when they spot you, get hit, burn, ride bugs (which have names), lose bugs, capture zones or just hallucinate. A deranged announcer commentates, and every minute or so a chaos event hits (moon gravity, rainbow rain, turbo pee, titan gnomes, bug stampede, disco speed). **V** shouts a battle cry.
+- **Art:** hand-drawn look: pillowy rounded shapes with wobbly edges, cel-shaded paint, wobbly ink outlines that redraw 8 times a second, paper grain and pencil hatching in the shadows. **H** turns it off.
 - **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. **T** cycles full / mild / off.
 - **Controls:** WASD move, Space jump, Shift walk, mouse aim, hold click to pee, E ride / hop off, Esc pause,
   M voices, N music, T trip level.

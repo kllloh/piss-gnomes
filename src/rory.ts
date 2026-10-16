@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SoftBox, toon } from './organic';
 import { Status, type Combatant, type PeeKind, type PotionState } from './combat';
 import type { World } from './world';
 import type { NavGrid } from './nav';
@@ -51,7 +52,7 @@ export class Rory implements Combatant {
     const BLOND = 0xe8c24a;
     const root = new THREE.Group();
     const mk = (parent: THREE.Object3D, w: number, h: number, d: number, x: number, y: number, z: number, color: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
+      const m = new THREE.Mesh(new SoftBox(w, h, d), toon({ color }));
       m.position.set(x, y, z);
       m.castShadow = true;
       parent.add(m);

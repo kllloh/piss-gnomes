@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SoftBox, toon, makePaintTexture } from './organic';
 
 export interface AABB {
   min: THREE.Vector3;
@@ -64,7 +65,7 @@ export class World {
   private stamp = new Int32Array(4096);
   private stampId = 0;
   private mats = new Map<number, THREE.MeshLambertMaterial>();
-  private tex = makeNoiseTexture(16);
+  private tex = makePaintTexture(190);
 
   constructor(half = 110) {
     this.half = half;
@@ -95,7 +96,7 @@ export class World {
   private mat(color: number): THREE.MeshLambertMaterial {
     let m = this.mats.get(color);
     if (!m) {
-      m = new THREE.MeshLambertMaterial({ color, map: this.tex });
+      m = toon({ color, map: this.tex });
       this.mats.set(color, m);
     }
     return m;
@@ -103,7 +104,7 @@ export class World {
 
   /** A block with a mesh. (cx, cz) is the footprint centre, y0 the base height. */
   box(cx: number, y0: number, cz: number, w: number, h: number, d: number, color: number, solid = true): THREE.Mesh {
-    const g = new THREE.BoxGeometry(w, h, d);
+    const g = new SoftBox(w, h, d);
     const uv = g.attributes.uv as THREE.BufferAttribute;
     const dims: [number, number][] = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
     for (let f = 0; f < 6; f++) {

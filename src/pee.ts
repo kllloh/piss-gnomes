@@ -41,7 +41,7 @@ export class PeeSystem {
   rateMul = 1;
 
   constructor(scene: THREE.Scene) {
-    this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0xffffff }), MAX);
+    this.mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.075, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }), MAX);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
     this.mesh.setColorAt(0, COLORS[0]);

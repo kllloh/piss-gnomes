@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SoftBox, toon } from './organic';
 
 export const GNOME_SCALE = 0.8;
 
@@ -28,9 +29,9 @@ export function createGnome(shirt: number, hat = 0xc42b2b): GnomeModel {
   const mats: THREE.MeshLambertMaterial[] = [];
 
   const mk = (parent: THREE.Object3D, w: number, h: number, d: number, x: number, y: number, z: number, color: number) => {
-    const m = new THREE.MeshLambertMaterial({ color });
+    const m = toon({ color });
     mats.push(m);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    const mesh = new THREE.Mesh(new SoftBox(w, h, d), m);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     parent.add(mesh);
@@ -99,9 +100,9 @@ export function createGoblin(shirt: number): GnomeModel {
   const mats: THREE.MeshLambertMaterial[] = [];
 
   const mk = (parent: THREE.Object3D, w: number, h: number, d: number, x: number, y: number, z: number, color: number) => {
-    const m = new THREE.MeshLambertMaterial({ color });
+    const m = toon({ color });
     mats.push(m);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    const mesh = new THREE.Mesh(new SoftBox(w, h, d), m);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     parent.add(mesh);

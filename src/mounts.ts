@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SoftBox, toon } from './organic';
 import { randomBugName } from './talk';
 import { PEE, type Combatant, type PeeKind } from './combat';
 
@@ -33,7 +34,7 @@ export interface Rider extends Combatant {
   onDismount(): void;
 }
 
-const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxGeo = new SoftBox(1, 1, 1);
 
 /** A giant bug with a pee cannon on its back. */
 export class Mount {
@@ -64,11 +65,11 @@ export class Mount {
     this.pos.copy(home);
     const def = MOUNT_DEFS[type];
     this.hp = this.maxHp = def.hp;
-    this.bodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const darkMat = new THREE.MeshLambertMaterial({ color: type === 'ladybug' ? 0x161616 : 0x2a1636 });
+    this.bodyMat = toon({ color: 0xffffff });
+    const darkMat = toon({ color: type === 'ladybug' ? 0x161616 : 0x2a1636 });
     this.glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.tipMat = new THREE.MeshBasicMaterial({ color: 0xf2d83a });
-    const saddleMat = new THREE.MeshLambertMaterial({ color: 0x7a2a3a });
+    const saddleMat = toon({ color: 0x7a2a3a });
     const box = (m: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, parent: THREE.Object3D = this.group) => {
       const mesh = new THREE.Mesh(boxGeo, m);
       mesh.scale.set(w, h, d);
