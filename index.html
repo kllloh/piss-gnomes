@@ -29,7 +29,9 @@
   #respawn { font-family: 'Audiowide', sans-serif; color: #fff0fc; text-shadow: 0 0 4px #ff5ce6, 0 0 12px #ff2bd6, 0 0 28px #ff2bd6; position: fixed; left: 0; right: 0; top: 40%; text-align: center; font-size: 34px; text-shadow: 0 0 8px #000; pointer-events: none; display: none; }
   #hit { position: fixed; inset: 0; box-shadow: inset 0 0 120px 30px rgba(220,0,0,0.0); pointer-events: none; transition: box-shadow 0.3s; }
   #hitmarker { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 34px; opacity: 0; pointer-events: none; text-shadow: 0 0 3px #000; }
-  #overlay { position: fixed; inset: 0; background: rgba(5,8,22,0.78); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer; overflow-y: auto; }
+  #overlay::before, #overlay::after { content: ''; flex: 1 0 0; } /* centres short menus but lets tall ones scroll from the top */
+  #overlay { touch-action: pan-y; -webkit-overflow-scrolling: touch; padding: 12px 0; box-sizing: border-box; }
+  #overlay { position: fixed; inset: 0; background: rgba(5,8,22,0.78); display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer; overflow-y: auto; }
   #overlay h1 { font-family: 'Monoton', 'Audiowide', sans-serif; font-size: 66px; margin: 0 0 4px; letter-spacing: 3px; text-shadow: none; background: linear-gradient(90deg, #ff2bd6, #19e3ff, #ff2bd6, #19e3ff, #ff2bd6); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rainbow 5s linear infinite; filter: drop-shadow(0 0 6px #ff2bd6) drop-shadow(0 0 16px rgba(255,43,214,.8)); }
   @keyframes rainbow { to { background-position: 300% 0; } }
   #overlay { background: linear-gradient(120deg, rgba(40,5,60,.82), rgba(5,40,60,.82), rgba(60,10,40,.82)); background-size: 300% 300%; animation: bgdrift 12s ease infinite; }
