@@ -80,7 +80,7 @@ export function createGnome(shirt: number, hat = 0xc42b2b): GnomeModel {
   mk(root, 0.16, 0.08, 0.1, 0.2, 1.03, -0.32, WHITE);
 
   // the tall pointy hat, as its own group so it can be shot off
-  const HC = 1.5;
+  const HC = 1.39; // brim sits right on top of the head (head top is at 1.37)
   const hatGroup = new THREE.Group();
   hatGroup.position.y = HC;
   root.add(hatGroup);
