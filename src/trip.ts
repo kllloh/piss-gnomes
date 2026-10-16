@@ -93,31 +93,15 @@ void main() {
   col += amp * pulse * 0.05 * vec3(1.0, 0.3, 0.8);
   col = max(col, 0.0);
   if (ink > 0.0) {
-    // --- hand-drawn look: wobbly ink outlines, painted flat colour, paper grain, scribbled shadows ---
-    float frame = floor(time * 8.0); // the drawing "boils" 8 times a second, like traced animation cels
-    vec2 px = 1.0 / res;
-    vec2 wob = 0.0016 * vec2(sin(vUv.y * 70.0 + frame * 1.9) + sin(vUv.y * 23.0 + frame * 0.7), cos(vUv.x * 64.0 + frame * 2.3) + cos(vUv.x * 19.0 + frame));
-    vec2 lu = vUv + wob;
-    float w = 1.7;
-    float l0 = lum(texture2D(tDiffuse, lu).rgb);
-    float l1 = lum(texture2D(tDiffuse, lu + vec2(px.x * w, 0.0)).rgb);
-    float l2 = lum(texture2D(tDiffuse, lu + vec2(0.0, px.y * w)).rgb);
-    float l3 = lum(texture2D(tDiffuse, lu + px * w).rgb);
-    float edge = smoothstep(0.045, 0.14, abs(l0 - l3) + abs(l1 - l2));
-    // paint: soften the colour into flat washes
+    // --- painted look: flat colour washes ---
+    vec2 res2 = res; // (kept so the uniform stays used)
+    // paint: soften the colour into flat washes, with a hint of warm paper
     vec3 pcol = sqrt(col);
     pcol = mix(pcol, floor(pcol * 7.0 + 0.5) / 7.0, 0.45 * ink);
-    // warm paper and a bit of pigment grain
-    float grain = hash12(gl_FragCoord.xy + frame * 17.0);
-    float blotch = vnoise(vUv * vec2(9.0, 6.0) * 2.0 + frame * 0.05);
-    pcol *= 1.0 - ink * (0.07 * grain + 0.09 * blotch);
-    pcol = mix(pcol, pcol * vec3(1.05, 1.0, 0.9), 0.6 * ink);
-    // diagonal pencil hatching in the shadows
-    float shade = lum(col);
-    float hatch = step(0.55, fract((gl_FragCoord.x + gl_FragCoord.y + frame * 3.0) * 0.16));
-    pcol *= 1.0 - ink * smoothstep(0.38, 0.05, shade) * hatch * 0.5;
-    // ink on top
-    pcol = mix(pcol, vec3(0.1, 0.06, 0.13), edge * 0.85 * ink);
+    float blotch = vnoise(vUv * vec2(9.0, 6.0) * 2.0);
+    pcol *= 1.0 - ink * 0.06 * blotch;
+    pcol = mix(pcol, pcol * vec3(1.05, 1.0, 0.92), 0.4 * ink);
+    pcol += res2.x * 0.0;
     col = pcol * pcol;
   }
   gl_FragColor = vec4(col, 1.0);

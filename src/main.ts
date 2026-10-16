@@ -513,7 +513,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyH') {
     trip.ink = trip.ink > 0 ? 0 : 1;
-    banner(trip.ink > 0 ? 'ART: HAND-DRAWN' : 'ART: SMOOTH', 1.2);
+    banner(trip.ink > 0 ? 'ART: PAINTED' : 'ART: PLAIN', 1.2);
   }
   if (e.code === 'KeyN') {
     music.setEnabled(!music.on);
