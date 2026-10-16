@@ -65,11 +65,17 @@ export class Mount {
     this.pos.copy(home);
     const def = MOUNT_DEFS[type];
     this.hp = this.maxHp = def.hp;
+    // garden-ornament bugs: glossy painted bodies, big googly eyes, rosy cheeks, a white beard and a pointy hat
     this.bodyMat = lit({ color: 0xffffff });
-    const darkMat = lit({ color: type === 'ladybug' ? 0x161616 : 0x2a1636 });
+    const darkMat = lit({ color: type === 'ladybug' ? 0x161616 : type === 'beetle' ? 0x6a3a1a : 0x4a2a6a });
     this.glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.tipMat = new THREE.MeshBasicMaterial({ color: 0xf2d83a });
     const saddleMat = lit({ color: 0x7a2a3a });
+    const whiteMat = lit({ color: 0xf7f4ec });
+    const pinkMat = lit({ color: 0xe8808a });
+    const cheekMat = lit({ color: 0xf0a0a0 });
+    const blackMat = lit({ color: 0x161616 });
+    const hatMat = lit({ color: type === 'beetle' ? 0xe8b830 : type === 'ladybug' ? 0x2b5fe0 : 0xd42b2b });
     const box = (m: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, parent: THREE.Object3D = this.group) => {
       const mesh = new THREE.Mesh(boxGeo, m);
       mesh.scale.set(w, h, d);
@@ -77,51 +83,83 @@ export class Mount {
       parent.add(mesh);
       return mesh;
     };
-    const leg = (side: number, z: number, y: number, reach: number, drop: number, idx: number) => {
+    const eyes = (x: number, y: number, z: number, size: number) => {
+      for (const sx of [-1, 1]) {
+        box(whiteMat, size, size, size * 0.5, sx * x, y, z);
+        box(blackMat, size * 0.45, size * 0.45, size * 0.3, sx * x + sx * size * 0.05, y - size * 0.05, z - size * 0.3);
+      }
+    };
+    const cheeks = (x: number, y: number, z: number, size: number) => {
+      for (const sx of [-1, 1]) box(cheekMat, size, size * 0.75, size * 0.3, sx * x, y, z);
+    };
+    const beard = (x: number, y: number, z: number, w: number) => {
+      [1, 0.8, 0.55, 0.3].forEach((k, i) => box(whiteMat, w * k, w * 0.26, w * 0.4, x, y - i * w * 0.24, z));
+    };
+    const hat = (x: number, y: number, z: number, w: number) => {
+      box(hatMat, w * 1.3, w * 0.14, w * 1.3, x, y, z);
+      [0.95, 0.76, 0.58, 0.4, 0.24].forEach((k, i) => box(hatMat, w * k, w * 0.3, w * k, x, y + w * 0.22 + i * w * 0.3, z + (i >= 3 ? w * 0.08 * (i - 2) : 0)));
+      box(this.glowMat, w * 0.14, w * 0.14, w * 0.14, x, y + w * 1.55, z + w * 0.22); // a glowing bobble on the bent tip
+    };
+    const dot = (x: number, y: number, z: number, size: number) => box(whiteMat, size, size * 0.3, size, x, y, z);
+    const leg = (side: number, z: number, y: number, reach: number, drop: number, idx: number, thick = 0.14) => {
       const g = new THREE.Group();
       g.position.set(side * 0.3, y, z);
-      box(darkMat, reach, 0.1, 0.1, side * reach * 0.5, 0.12, 0, g);
-      box(darkMat, 0.1, drop, 0.1, side * reach, 0.12 - drop * 0.5, 0, g);
+      box(darkMat, reach, thick, thick, side * reach * 0.5, 0.12, 0, g);
+      box(darkMat, thick, drop, thick, side * reach, 0.12 - drop * 0.5, 0, g);
+      box(blackMat, thick * 1.7, thick * 0.9, thick * 2.4, side * reach, 0.12 - drop + thick * 0.2, -thick * 0.4, g); // a little black boot
       this.group.add(g);
       this.legs.push({ g, side, idx });
     };
     if (type === 'spider') {
-      box(this.bodyMat, 0.9, 0.7, 1.0, 0, 0.85, 0.55); // abdomen
-      for (const z of [0.2, 0.55, 0.9]) box(this.glowMat, 0.94, 0.07, 0.16, 0, 0.9, z);
-      box(darkMat, 0.6, 0.5, 0.6, 0, 0.8, -0.2); // thorax
-      box(this.bodyMat, 0.5, 0.4, 0.4, 0, 0.8, -0.65); // head
-      for (const [x, y] of [[-0.14, 0.9], [0.14, 0.9], [-0.06, 0.78], [0.06, 0.78]]) box(this.glowMat, 0.1, 0.1, 0.06, x, y, -0.86);
+      box(this.bodyMat, 1.0, 0.72, 1.1, 0, 0.85, 0.55); // painted abdomen with white polka dots
+      for (const [x, z] of [[-0.27, 0.25], [0.27, 0.25], [0, 0.6], [-0.27, 0.95], [0.27, 0.95]]) dot(x, 1.22, z, 0.22);
+      for (const sx of [-1, 1]) for (const z of [0.3, 0.8]) box(whiteMat, 0.04, 0.2, 0.2, sx * 0.51, 0.9, z);
+      box(darkMat, 0.7, 0.55, 0.6, 0, 0.8, -0.2); // thorax
+      box(this.bodyMat, 0.66, 0.52, 0.52, 0, 0.88, -0.72); // big round head
+      eyes(0.17, 1.0, -1.0, 0.2);
+      box(pinkMat, 0.14, 0.14, 0.12, 0, 0.88, -1.02); // round nose
+      cheeks(0.25, 0.8, -0.99, 0.12);
+      beard(0, 0.68, -0.98, 0.5);
+      hat(0, 1.14, -0.72, 0.5);
       for (const sx of [-1, 1]) {
-        box(darkMat, 0.14, 0.14, 0.8, sx * 0.28, 1.12, -0.7); // cannon barrels
-        box(this.tipMat, 0.2, 0.2, 0.06, sx * 0.28, 1.12, -1.12);
+        box(darkMat, 0.16, 0.16, 0.95, sx * 0.44, 1.32, -0.2); // pee cannons on its back
+        box(this.tipMat, 0.22, 0.22, 0.06, sx * 0.44, 1.32, -0.7);
       }
-      box(saddleMat, 0.45, 0.1, 0.45, 0, 1.2, -0.05);
+      box(saddleMat, 0.45, 0.1, 0.45, 0, 1.22, 0.05);
       for (let i = 0; i < 4; i++) { leg(-1, -0.45 + i * 0.32, 0.8, 0.85, 0.95, i); leg(1, -0.45 + i * 0.32, 0.8, 0.85, 0.95, i); }
     } else if (type === 'beetle') {
-      box(this.bodyMat, 1.3, 0.65, 1.7, 0, 0.7, 0.2); // shell
-      box(this.glowMat, 0.08, 0.04, 1.7, 0, 1.05, 0.2);
-      for (const z of [-0.2, 0.3, 0.8]) for (const sx of [-1, 1]) box(this.glowMat, 0.22, 0.05, 0.22, sx * 0.4, 1.04, z);
-      box(darkMat, 0.7, 0.45, 0.5, 0, 0.6, -0.85); // head
-      box(darkMat, 0.14, 0.14, 0.55, 0, 0.82, -1.2); // horn
+      box(this.bodyMat, 1.35, 0.7, 1.7, 0, 0.75, 0.2); // shell
+      box(whiteMat, 0.06, 0.04, 1.7, 0, 1.1, 0.2);
+      for (const z of [-0.25, 0.3, 0.85]) for (const sx of [-1, 1]) dot(sx * 0.42, 1.11, z, 0.26);
+      box(darkMat, 0.8, 0.56, 0.56, 0, 0.66, -0.95); // head
+      eyes(0.2, 0.82, -1.25, 0.22);
+      box(pinkMat, 0.16, 0.16, 0.14, 0, 0.66, -1.25);
+      cheeks(0.3, 0.58, -1.24, 0.13);
+      beard(0, 0.46, -1.22, 0.58);
+      hat(0, 0.96, -0.95, 0.56);
       for (const sx of [-1, 1]) {
-        box(this.glowMat, 0.12, 0.12, 0.06, sx * 0.2, 0.72, -1.12);
-        box(darkMat, 0.18, 0.18, 1.0, sx * 0.42, 1.2, -0.45); // twin heavy cannons
-        box(this.tipMat, 0.26, 0.26, 0.06, sx * 0.42, 1.2, -0.97);
+        box(darkMat, 0.2, 0.2, 1.05, sx * 0.47, 1.22, -0.2); // twin heavy cannons
+        box(this.tipMat, 0.28, 0.28, 0.06, sx * 0.47, 1.22, -0.74);
       }
-      box(saddleMat, 0.55, 0.1, 0.55, 0, 1.1, 0.3);
-      for (let i = 0; i < 3; i++) { leg(-1, -0.3 + i * 0.55, 0.55, 0.8, 0.6, i); leg(1, -0.3 + i * 0.55, 0.55, 0.8, 0.6, i); }
+      box(saddleMat, 0.55, 0.1, 0.55, 0, 1.13, 0.35);
+      for (let i = 0; i < 3; i++) { leg(-1, -0.3 + i * 0.55, 0.55, 0.8, 0.6, i, 0.16); leg(1, -0.3 + i * 0.55, 0.55, 0.8, 0.6, i, 0.16); }
     } else {
-      box(this.bodyMat, 1.1, 0.55, 1.3, 0, 0.6, 0.15); // red shell
-      box(darkMat, 0.05, 0.04, 1.3, 0, 0.9, 0.15);
-      for (const [x, z] of [[-0.3, -0.15], [0.3, -0.15], [-0.3, 0.45], [0.3, 0.45]]) box(darkMat, 0.26, 0.05, 0.26, x, 0.88, z);
-      box(darkMat, 0.6, 0.38, 0.4, 0, 0.55, -0.65);
+      box(this.bodyMat, 1.15, 0.6, 1.3, 0, 0.62, 0.15); // red shell, black spots
+      box(darkMat, 0.05, 0.04, 1.3, 0, 0.93, 0.15);
+      for (const [x, z] of [[-0.3, -0.15], [0.3, -0.15], [-0.3, 0.45], [0.3, 0.45]]) box(darkMat, 0.26, 0.05, 0.26, x, 0.93, z);
+      box(darkMat, 0.7, 0.46, 0.46, 0, 0.56, -0.72); // head
+      eyes(0.17, 0.7, -0.97, 0.2);
+      box(pinkMat, 0.13, 0.13, 0.12, 0, 0.56, -0.97);
+      cheeks(0.25, 0.48, -0.96, 0.11);
+      beard(0, 0.38, -0.95, 0.38);
+      hat(0, 0.8, -0.72, 0.46);
       for (const sx of [-1, 1]) {
-        box(this.glowMat, 0.14, 0.14, 0.06, sx * 0.17, 0.62, -0.86);
-        box(darkMat, 0.05, 0.4, 0.05, sx * 0.14, 0.88, -0.8); // antennae
+        box(darkMat, 0.05, 0.4, 0.05, sx * 0.3, 1.1, -0.5); // antennae with glowing bobbles
+        box(this.glowMat, 0.12, 0.12, 0.12, sx * 0.3, 1.33, -0.5);
+        box(darkMat, 0.14, 0.14, 0.75, sx * 0.4, 1.0, 0.2); // twin pea-shooters
+        box(this.tipMat, 0.2, 0.2, 0.06, sx * 0.4, 1.0, -0.2);
       }
-      box(darkMat, 0.16, 0.16, 0.7, 0, 1.0, -0.4);
-      box(this.tipMat, 0.22, 0.22, 0.06, 0, 1.0, -0.78);
-      box(saddleMat, 0.4, 0.08, 0.4, 0, 0.97, 0.3);
+      box(saddleMat, 0.4, 0.08, 0.4, 0, 0.97, 0.35);
       for (let i = 0; i < 3; i++) { leg(-1, -0.2 + i * 0.4, 0.45, 0.6, 0.5, i); leg(1, -0.2 + i * 0.4, 0.45, 0.6, 0.5, i); }
     }
     this.group.position.copy(home);

@@ -38,56 +38,77 @@ export function createGnome(shirt: number, hat = 0xc42b2b): GnomeModel {
     return mesh;
   };
 
-  // legs pivot at the hip
+  const TROUSERS = 0x3a2a6a;
+  const BOOT = 0x1a1414;
+  const WHITE = 0xf7f4ec;
+  const PINK = 0xe8808a;
+
+  // a classic garden gnome: stubby legs in big black boots
   const legL = new THREE.Group();
   const legR = new THREE.Group();
-  legL.position.set(-0.13, 0.45, 0);
-  legR.position.set(0.13, 0.45, 0);
-  mk(legL, 0.22, 0.45, 0.25, 0, -0.225, 0, 0x4a3320);
-  mk(legR, 0.22, 0.45, 0.25, 0, -0.225, 0, 0x4a3320);
+  legL.position.set(-0.14, 0.45, 0);
+  legR.position.set(0.14, 0.45, 0);
+  for (const leg of [legL, legR]) {
+    mk(leg, 0.26, 0.28, 0.28, 0, -0.14, 0, TROUSERS);
+    mk(leg, 0.3, 0.2, 0.42, 0, -0.35, -0.05, BOOT);
+    mk(leg, 0.3, 0.05, 0.44, 0, -0.43, -0.05, 0x3a2e28); // sole
+  }
   root.add(legL, legR);
 
-  // torso, belt
-  mk(root, 0.6, 0.55, 0.35, 0, 0.725, 0, shirt);
-  mk(root, 0.62, 0.08, 0.37, 0, 0.52, 0, 0x222222);
-  mk(root, 0.1, 0.1, 0.02, 0, 0.52, -0.19, 0xe0b030);
+  // round jacket, black belt with a gold buckle
+  mk(root, 0.66, 0.54, 0.46, 0, 0.72, 0, shirt);
+  mk(root, 0.68, 0.09, 0.48, 0, 0.5, 0, 0x1a1a1a);
+  mk(root, 0.13, 0.11, 0.03, 0, 0.5, -0.25, 0xe8b830);
 
-  // head (front is -z)
-  mk(root, 0.38, 0.38, 0.38, 0, 1.19, 0, SKIN);
-  mk(root, 0.1, 0.1, 0.1, 0, 1.15, -0.23, 0xe0908a);
-  mk(root, 0.06, 0.06, 0.04, -0.09, 1.25, -0.19, 0x111111);
-  mk(root, 0.06, 0.06, 0.04, 0.09, 1.25, -0.19, 0x111111);
-  mk(root, 0.38, 0.3, 0.1, 0, 0.95, -0.24, 0xf4f4f4); // beard
-  mk(root, 0.2, 0.08, 0.06, 0, 1.08, -0.2, 0xf4f4f4); // moustache
+  // big round head with a bright nose; front is -z
+  mk(root, 0.46, 0.4, 0.44, 0, 1.17, 0, SKIN);
+  mk(root, 0.18, 0.18, 0.16, 0, 1.12, -0.29, PINK); // big round nose
+  mk(root, 0.08, 0.08, 0.04, -0.12, 1.22, -0.23, 0x161616); // eyes
+  mk(root, 0.08, 0.08, 0.04, 0.12, 1.22, -0.23, 0x161616);
+  mk(root, 0.12, 0.09, 0.03, -0.18, 1.1, -0.225, 0xf0a0a0); // rosy cheeks
+  mk(root, 0.12, 0.09, 0.03, 0.18, 1.1, -0.225, 0xf0a0a0);
+  mk(root, 0.07, 0.12, 0.1, -0.265, 1.15, 0, PINK); // ears
+  mk(root, 0.07, 0.12, 0.1, 0.265, 1.15, 0, PINK);
 
-  // pointy hat, stacked blocks
-  const HC = 1.9; // hat group pivots at its own centre so it tumbles nicely when knocked off
+  // a huge white beard that covers the whole chest
+  mk(root, 0.5, 0.2, 0.18, 0, 1.0, -0.26, WHITE);
+  mk(root, 0.46, 0.2, 0.2, 0, 0.82, -0.29, WHITE);
+  mk(root, 0.36, 0.2, 0.2, 0, 0.64, -0.3, WHITE);
+  mk(root, 0.22, 0.16, 0.18, 0, 0.5, -0.3, WHITE);
+  mk(root, 0.34, 0.09, 0.12, 0, 1.05, -0.33, WHITE); // moustache
+  mk(root, 0.16, 0.08, 0.1, -0.2, 1.03, -0.32, WHITE);
+  mk(root, 0.16, 0.08, 0.1, 0.2, 1.03, -0.32, WHITE);
+
+  // the tall pointy hat, as its own group so it can be shot off
+  const HC = 1.5;
   const hatGroup = new THREE.Group();
   hatGroup.position.y = HC;
   root.add(hatGroup);
-  mk(hatGroup, 0.5, 0.1, 0.5, 0, 1.43 - HC, 0, hat);
-  mk(hatGroup, 0.38, 0.2, 0.38, 0, 1.58 - HC, 0, hat);
-  mk(hatGroup, 0.3, 0.2, 0.3, 0, 1.78 - HC, 0, hat);
-  mk(hatGroup, 0.22, 0.2, 0.22, 0, 1.98 - HC, 0, hat);
-  mk(hatGroup, 0.14, 0.2, 0.14, 0, 2.18 - HC, 0, hat);
-  mk(hatGroup, 0.08, 0.12, 0.08, 0, 2.34 - HC, 0, hat);
+  const layers: [number, number, number, number][] = [
+    [0.62, 0.08, 0.62, 0],
+    [0.5, 0.16, 0.5, 0.12],
+    [0.42, 0.16, 0.42, 0.28],
+    [0.34, 0.16, 0.34, 0.44],
+    [0.26, 0.16, 0.26, 0.6],
+    [0.19, 0.16, 0.19, 0.76],
+    [0.12, 0.16, 0.12, 0.92],
+  ];
+  layers.forEach(([w, h, d, y], i) => mk(hatGroup, w, h, d, 0, y, i >= 5 ? 0.04 * (i - 4) : 0, hat));
+  mk(hatGroup, 0.07, 0.07, 0.07, 0, 1.05, 0.1, 0xf7f4ec); // little bobble at the bent tip
 
-  // arms pivot at the shoulder
+  // arms with white mittens
   const armL = new THREE.Group();
   const armR = new THREE.Group();
-  armL.position.set(-0.38, 0.98, 0);
-  armR.position.set(0.38, 0.98, 0);
+  armL.position.set(-0.42, 0.95, 0);
+  armR.position.set(0.42, 0.95, 0);
   for (const arm of [armL, armR]) {
-    mk(arm, 0.15, 0.5, 0.15, 0, -0.25, 0, shirt);
-    mk(arm, 0.14, 0.14, 0.14, 0, -0.56, 0, SKIN);
+    mk(arm, 0.2, 0.36, 0.22, 0, -0.18, 0, shirt);
+    mk(arm, 0.23, 0.2, 0.24, 0, -0.44, 0, WHITE);
   }
-  // rifle held by the right arm
-  mk(armR, 0.09, 0.6, 0.12, 0, -0.6, 0, 0x2a2a2a);
-  mk(armR, 0.07, 0.2, 0.2, 0, -0.45, 0.14, 0x6b4a2f);
   root.add(armL, armR);
 
   root.scale.setScalar(GNOME_SCALE);
-  return { root, legL, legR, armL, armR, mats, headTop: 1.48, hatTop: 2.4, headHalf: 0.25, hat: hatGroup, hatHeight: HC, hatHalf: 0.15 };
+  return { root, legL, legR, armL, armR, mats, headTop: 1.4, hatTop: 2.6, headHalf: 0.25, hat: hatGroup, hatHeight: HC, hatHalf: 0.2 };
 }
 
 const GOBLIN_SKIN = 0x6aa84f;
@@ -176,6 +197,7 @@ export function createGoblin(shirt: number): GnomeModel {
 
 /** Both sides are gnomes now. The hat is the team badge: red hats against blue caps. */
 export function createFighter(faction: Faction): GnomeModel {
-  const shirts = [0x3d8a3d, 0xd88a2a, 0x7a3fa0, 0x2a8f8f, 0xb5527a, 0xe0d040];
+  // jackets: red hats wear blues and greens, blue caps wear greens and golds, so the hat stays the team badge
+  const shirts = faction === 'gnome' ? [0x2f5fb0, 0x2a8f4a, 0x3a9ad0] : [0x3d8a3d, 0xd8a02a, 0x8a5a2a];
   return createGnome(shirts[Math.floor(Math.random() * shirts.length)], faction === 'gnome' ? 0xd42b2b : 0x2b5fe0);
 }
