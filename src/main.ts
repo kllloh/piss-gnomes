@@ -12,6 +12,7 @@ import { Effects } from './fx';
 import { Sound } from './audio';
 import { Music } from './music';
 import { Trip } from './trip';
+import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } from './talk';
 import { Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
 
@@ -127,6 +128,7 @@ const elHp = $('hp');
 const elStats = $('stats');
 const elMount = $('mountinfo');
 const elPrompt = $('prompt');
+const elChatter = $('chatter');
 const mini = $('minimap') as HTMLCanvasElement;
 const miniCtx = mini.getContext('2d')!;
 
@@ -184,6 +186,67 @@ function buildFighters() {
   everyone = [player, ...fighters];
 }
 
+// --- talking ---------------------------------------------------------------------------------------
+let chatterT = 0;
+const VOICE_COLOURS = { gnome: '#ff9a9a', goblin: '#9ac4ff', announcer: '#ffe45c' } as const;
+sound.onSpeak = (name, text, voice) => {
+  const colour = name === 'You' ? '#ffffff' : VOICE_COLOURS[voice];
+  elChatter.innerHTML = `<b style="color:${colour}">${name || '???'}</b> ${text}`;
+  elChatter.style.opacity = '1';
+  chatterT = 3.6;
+};
+
+/** A bot says something, if it is close enough to hear and it feels like it. */
+function fighterSay(f: Fighter, ctx: SayCtx, bug?: string) {
+  if (Math.random() > SAY_CHANCE[ctx]) return;
+  const sp = sound.spatial(f.pos.x, f.pos.z);
+  if (sp.vol < 0.2) return;
+  const text = sayLine(ctx, f.faction, { bug: bug ?? f.mount?.petName });
+  if (text) sound.taunt(text, sp.vol, sp.pan, f.voicePitch, f.faction, f.voiceSeed, 0, f.name);
+}
+/** The player talks (in their own side's voice). */
+function playerSay(ctx: SayCtx, prio = 1) {
+  const text = sayLine(ctx, faction, { bug: player.mount?.petName });
+  if (text) sound.taunt(text, 1, 0, 1.5, faction, 3, prio, 'You');
+}
+function announcer(ctx: AnnounceCtx) {
+  sound.taunt(announce(ctx), 1, 0, 1, 'announcer', 0, 3, 'ANNOUNCER');
+}
+Fighter.onSay = (f, ctx) => fighterSay(f, ctx);
+
+// --- chaos: every minute or so the forest does something unhinged ---------------------------------
+let timeScale = 1;
+interface Chaos { id: AnnounceCtx; label: string; dur: number; start: () => void; end: () => void; tick?: () => void }
+function rainbowRoll() {
+  const give = (c: Combatant) => { if (c.alive) c.potion = { kind: pick(POTION_KINDS), t: 12 }; c.bladder = 100; };
+  give(player);
+  for (const f of fighters) give(f);
+}
+const CHAOS: Chaos[] = [
+  { id: 'chaos_moon', label: 'MOON GRAVITY', dur: 25, start: () => { player.gravityMul = 0.3; }, end: () => { player.gravityMul = 1; } },
+  { id: 'chaos_rainbow', label: 'RAINBOW RAIN', dur: 20, start: rainbowRoll, end: () => {}, tick: rainbowRoll },
+  { id: 'chaos_turbo', label: 'TURBO PEE', dur: 20, start: () => { pee.rateMul = 2; }, end: () => { pee.rateMul = 1; } },
+  { id: 'chaos_titan', label: 'TITAN GNOMES', dur: 25, start: () => { Fighter.size = 1.6; }, end: () => { Fighter.size = 1; } },
+  { id: 'chaos_stampede', label: 'BUG STAMPEDE', dur: 2, start: () => { for (const m of mounts.list) if (!m.alive) m.reset(); }, end: () => {} },
+  { id: 'chaos_zoom', label: 'DISCO SPEED', dur: 20, start: () => { timeScale = 1.6; }, end: () => { timeScale = 1; } },
+];
+let chaos: { def: Chaos; t: number; tickT: number } | null = null;
+let chaosIn = 45 + Math.random() * 30;
+function endChaos() {
+  if (!chaos) return;
+  chaos.def.end();
+  chaos = null;
+}
+function startChaos() {
+  endChaos();
+  const def = pick(CHAOS);
+  chaos = { def, t: def.dur, tickT: 4 };
+  def.start();
+  banner(`⚡ ${def.label} ⚡`, 3.2);
+  announcer(def.id);
+  feedPush(`CHAOS: ${def.label}`, '#ffe45c');
+}
+
 // --- match state ------------------------------------------------------------------------------
 type Phase = 'play' | 'end';
 let phase: Phase = 'play';
@@ -195,6 +258,12 @@ let deaths = 0;
 let time = 0;
 let respawnT = 0;
 let playerWasAlive = true;
+let streak = 0;
+let idleT = 3;
+let fillerT = 40;
+let warned50 = false;
+let warned20 = false;
+let firstMatch = true;
 
 function respawnPoint(team: 0 | 1): { pos: THREE.Vector3; yaw: number } {
   const yaw = team === 0 ? 0 : Math.PI;
@@ -218,6 +287,10 @@ function newMatch() {
   kills = 0;
   deaths = 0;
   phase = 'play';
+  endChaos();
+  chaosIn = 45 + Math.random() * 30;
+  streak = 0;
+  warned50 = warned20 = false;
   zones.reset(forest.zones);
   potions.reset();
   mounts.reset();
@@ -233,6 +306,7 @@ function newMatch() {
   playerWasAlive = true;
   respawnT = 0;
   banner('CAPTURE THE ZONES! HOLD MORE THAN THE ENEMY!', 3);
+  if (!firstMatch) setTimeout(() => announcer('start'), 1200);
 }
 
 // --- combat results ------------------------------------------------------------------------------
@@ -319,12 +393,25 @@ function registerKill(victim: Combatant, from: Combatant | null, kind: PeeKind) 
   tickets[victim.team] = Math.max(0, tickets[victim.team] - 1);
   const killer = from?.name ?? 'The forest';
   feedPush(`${killer} ${killVerbBy(kind)} ${victim.name}`, victim.team === 1 ? '#a8f0a8' : '#ffa0a0');
-  if (from?.isPlayer) kills++;
+  if (from?.isPlayer) {
+    kills++;
+    streak++;
+    if (streak === 3) announcer('streak3');
+    else if (streak === 5) announcer('streak5');
+    else if (streak === 10) announcer('streak10');
+    else if (Math.random() < 0.4) playerSay('kill');
+  }
+  if (victim.isPlayer) { streak = 0; if (Math.random() < 0.6) playerSay('death'); }
   const sp = sound.spatial(victim.pos.x, victim.pos.z);
   if (victim instanceof Fighter) sound.gnomeDeath(sp.vol * 0.7, sp.pan, victim.voicePitch, victim.faction === 'goblin');
-  if (from instanceof Fighter && Math.random() < 0.18) {
-    const ks = sound.spatial(from.pos.x, from.pos.z);
-    sound.taunt(pick(LINES[from.faction]), ks.vol, ks.pan, from.voicePitch, from.faction, from.voiceSeed);
+  if (victim instanceof Fighter) fighterSay(victim, 'death');
+  if (from instanceof Fighter) {
+    fighterSay(from, 'kill');
+    if (Math.random() < 0.3) { // a mate cheers
+      grid.query(from.pos.x, from.pos.z, 16, nearBuf);
+      const mate = nearBuf.find((o) => o instanceof Fighter && o !== from && o.alive && o.team === from.team);
+      if (mate instanceof Fighter) fighterSay(mate, 'cheer');
+    }
   }
 }
 
@@ -353,6 +440,10 @@ zones.onCapture = (z: Zone, owner) => {
   banner(`${mine ? 'YOUR TEAM' : 'THE ENEMY'} CAPTURED ${z.name.toUpperCase()}!`, 2.2);
   feedPush(`${z.name} → ${FACTION_INFO[factionOf(owner)].label}`, mine ? '#a8f0a8' : '#ffa0a0');
   sound.horn(mine);
+  grid.query(z.x, z.z, z.radius, nearBuf);
+  const talker = nearBuf.find((o) => o instanceof Fighter && o.alive && o.team === owner);
+  if (talker instanceof Fighter) fighterSay(talker, 'capture');
+  if (Math.random() < 0.7) announcer(mine ? 'capture' : 'lost');
 };
 
 mounts.onHurt = (m) => {
@@ -367,8 +458,10 @@ mounts.onBreak = (m, rider, from) => {
   const sp = sound.spatial(m.pos.x, m.pos.z);
   sound.mountBreak(Math.max(sp.vol, rider?.isPlayer ? 1 : 0), sp.pan);
   const who = from?.name ?? 'The forest';
-  feedPush(`${who} popped ${rider ? rider.name + "'s " : 'a '}${MOUNT_DEFS[m.type].name}`, '#ffd0ff');
-  if (rider?.isPlayer) banner('YOUR RIDE EXPLODED INTO GOO!', 2);
+  feedPush(`${who} popped ${rider ? rider.name + "'s " : ''}${m.petName} the ${MOUNT_DEFS[m.type].name}`, '#ffd0ff');
+  if (rider?.isPlayer) { banner(`${m.petName.toUpperCase()} EXPLODED INTO GOO!`, 2); playerSay('bugpop', 2); }
+  else if (rider instanceof Fighter) fighterSay(rider, 'bugpop', m.petName);
+  else if (Math.random() < 0.4) announcer('bugpop');
 };
 
 // --- input ---------------------------------------------------------------------------------------
@@ -393,12 +486,14 @@ function toggleRide() {
   const m = mounts.nearestFree(player.pos.x, player.pos.z, 3.6);
   if (m) {
     mounts.board(m, player);
-    banner(`${m.def.name.toUpperCase()}! Press E to hop off.`, 2.2);
+    banner(`${m.petName.toUpperCase()} THE ${m.def.name.toUpperCase()}! Press E to hop off.`, 2.4);
     sound.mount();
+    if (Math.random() < 0.85) playerSay('mount');
   }
 }
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
+  if (e.code === 'KeyV' && !e.repeat && locked && player.alive) playerSay('shout', 2);
   if (e.code === 'KeyT') {
     trip.level = (trip.level + 2) % 3; // 2 -> 1 -> 0 -> 2
     banner(['TRIP: OFF (BORING)', 'TRIP: MILD', 'TRIP: FULL SEND'][trip.level], 1.2);
@@ -416,6 +511,7 @@ window.addEventListener('keydown', (e) => {
 let fallback = false;
 function setRunning(on: boolean) {
   locked = on;
+  if (on && firstMatch) { firstMatch = false; setTimeout(() => announcer('start'), 900); }
   elOverlay.style.display = on ? 'none' : 'flex';
   if (!on) { firing = false; sound.pee(false); elMsg.textContent = 'Paused — click to resume'; }
 }
@@ -547,14 +643,14 @@ function renderHud() {
   if (player.mount) {
     const m = player.mount;
     elMount.style.display = 'block';
-    elMount.innerHTML = `<b>${m.def.name}</b> ${Math.max(0, Math.ceil(m.hp))}/${m.maxHp}<div class="bar"><div class="fill" style="width:${(m.hp / m.maxHp) * 100}%;background:#ff40a0"></div></div>`;
+    elMount.innerHTML = `<b>${m.petName}</b> the ${m.def.name} ${Math.max(0, Math.ceil(m.hp))}/${m.maxHp}<div class="bar"><div class="fill" style="width:${(m.hp / m.maxHp) * 100}%;background:#ff40a0"></div></div>`;
     elPrompt.style.display = 'block';
     elPrompt.textContent = 'E — hop off';
   } else {
     elMount.style.display = 'none';
     const near = player.alive ? mounts.nearestFree(player.pos.x, player.pos.z, 3.6) : null;
     elPrompt.style.display = near ? 'block' : 'none';
-    if (near) elPrompt.textContent = `E — ride the ${near.def.name}`;
+    if (near) elPrompt.textContent = `E — ride ${near.petName} the ${near.def.name}`;
   }
   elFeed.innerHTML = feed.map((l) => `<div style="color:${l.color}">${l.text}</div>`).join('');
 
@@ -699,6 +795,26 @@ function simulate(dt: number) {
   fightCtx.time = time;
   yelps = Math.min(2, yelps + dt * 10);
 
+  idleT -= dt;
+  if (idleT <= 0) {
+    idleT = 1.3 + Math.random() * 1.7;
+    grid.query(player.pos.x, player.pos.z, 30, nearBuf);
+    const o = nearBuf[Math.floor(Math.random() * nearBuf.length)];
+    if (o instanceof Fighter && o.alive) fighterSay(o, 'idle');
+  }
+  fillerT -= dt;
+  if (fillerT <= 0) { fillerT = 40 + Math.random() * 30; announcer('filler'); }
+  if (phase === 'play') {
+    chaosIn -= dt;
+    if (chaosIn <= 0) { chaosIn = 55 + Math.random() * 35; startChaos(); }
+  }
+  if (chaos) {
+    chaos.t -= dt;
+    chaos.tickT -= dt;
+    if (chaos.tickT <= 0) { chaos.tickT = 4; chaos.def.tick?.(); }
+    if (chaos.t <= 0) endChaos();
+  }
+
   grid.clear();
   for (const c of everyone) if (c.alive) grid.insert(c);
 
@@ -723,6 +839,9 @@ function simulate(dt: number) {
     if (who.isPlayer) {
       banner(`${PEE[p.kind].name.toUpperCase()}! ${PEE[p.kind].blurb}`, 2.6);
       sound.potion();
+      if (Math.random() < 0.6) playerSay(p.kind as SayCtx);
+    } else if (who instanceof Fighter) {
+      fighterSay(who, p.kind as SayCtx);
     }
   });
   zones.update(dt, everyone, time);
@@ -758,11 +877,14 @@ function simulate(dt: number) {
       if (a > b) tickets[1] = Math.max(0, tickets[1] - (a - b));
       else if (b > a) tickets[0] = Math.max(0, tickets[0] - (b - a));
     }
+    if (!warned50 && Math.min(tickets[0], tickets[1]) <= 50) { warned50 = true; announcer('low50'); }
+    if (!warned20 && Math.min(tickets[0], tickets[1]) <= 20) { warned20 = true; announcer('low20'); }
     if (tickets[0] <= 0 || tickets[1] <= 0) {
       phase = 'end';
       phaseT = 9;
       const won = tickets[1] <= 0;
       banner(won ? 'VICTORY! THE FOREST IS YOURS!' : 'DEFEAT! YOUR TICKETS RAN DRY', 8);
+      announcer(won ? 'victory' : 'defeat');
     }
   } else {
     phaseT -= dt;
@@ -779,7 +901,7 @@ let fovNow = 75;
 
 function psychedelia(dt: number, vt: number, beat: number) {
   const kind: PeeKind = player.potion?.kind ?? 'normal';
-  const target = 0.55 + (player.potion ? 0.2 : 0) + (player.mount ? 0.12 : 0) + (firing ? 0.08 : 0) + player.hurtFlash * 0.25;
+  const target = 0.55 + (player.potion ? 0.2 : 0) + (player.mount ? 0.12 : 0) + (firing ? 0.08 : 0) + (chaos ? 0.25 : 0) + player.hurtFlash * 0.25;
   ampNow += (Math.min(1, target) - ampNow) * Math.min(1, dt * 2);
   tintNow += (TINTS[kind] - tintNow) * Math.min(1, dt * 1.5);
   const lvl = trip.level / 2;
@@ -803,7 +925,7 @@ function tick() {
   const beat = music.pulse();
   psychedelia(Math.min(raw, 0.05), vt, beat);
   const dt = Math.min(raw, 0.05);
-  if (locked) { simulate(dt); adaptQuality(raw); }
+  if (locked) { simulate(dt * timeScale); adaptQuality(raw); }
 
   // the shadow follows the player around the big map
   moon.target.position.set(player.pos.x, 0, player.pos.z);
@@ -812,6 +934,7 @@ function tick() {
   elHit.style.boxShadow = `inset 0 0 120px 30px rgba(220,0,0,${(player.hurtFlash * 0.7).toFixed(2)})`;
   player.hurtFlash = Math.max(0, player.hurtFlash - dt * 1.8);
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) elBanner.style.opacity = '0'; }
+  if (chatterT > 0) { chatterT -= dt; if (chatterT <= 0) elChatter.style.opacity = '0'; }
   if (markerT > 0) { markerT -= dt; if (markerT <= 0) elMarker.style.opacity = '0'; }
   for (const f of feed) f.t -= dt;
   while (feed.length && feed[0].t <= 0) feed.shift();
@@ -840,6 +963,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
+  fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   setFaction, newMatch, applyHit, respawnPoint, sim: simulate,

@@ -1,4 +1,6 @@
 /** Procedural sound effects and gnome voices (no asset files needed). */
+export type Voice = 'gnome' | 'goblin' | 'announcer';
+
 export class Sound {
   private ctx: AudioContext | null = null;
   private noise: AudioBuffer | null = null;
@@ -181,7 +183,7 @@ export class Sound {
 
   // --- speech: pick a fitting system voice per character ----------------------------
 
-  private pools: { gnome: SpeechSynthesisVoice[]; goblin: SpeechSynthesisVoice[] } | null = null;
+  private pools: Record<Voice, SpeechSynthesisVoice[]> | null = null;
   private poolsFor = 0;
 
   private voicePools() {
@@ -204,6 +206,7 @@ export class Sound {
       // gnomes: posh British-ish voices, goblins: low male voices
       gnome: best(gb.length ? gb : pool).slice(0, 4),
       goblin: best(males.length ? males : pool).slice(0, 4),
+      announcer: best(males.length ? males : pool).slice(0, 2),
     };
     this.poolsFor = vs.length;
     return this.pools;
@@ -212,31 +215,54 @@ export class Sound {
   /** Names of the voices that will be used (for debugging). */
   voiceNames() {
     const p = this.voicePools();
-    return p ? { gnome: p.gnome.map((v) => v.name), goblin: p.goblin.map((v) => v.name) } : null;
+    return p ? { gnome: p.gnome.map((v) => v.name), goblin: p.goblin.map((v) => v.name), announcer: p.announcer.map((v) => v.name) } : null;
   }
 
-  /** Speak a line in the character's own voice (browser speech), or babble if speech isn't available. */
-  taunt(text: string, vol: number, pan: number, p = 1.8, faction: 'gnome' | 'goblin' = 'gnome', seed = 0) {
+  /** Called whenever a line is actually spoken, so the game can show a subtitle. */
+  onSpeak: ((name: string, text: string, voice: Voice) => void) | null = null;
+  private curPrio = 0;
+
+  /**
+   * Speak a line in the character's own voice (browser speech), or babble if speech isn't available.
+   * Higher `prio` lines (the announcer, the player) cut off lesser ones; gnomes only speak when it is quiet.
+   * Now and then a line comes out screamed, drawled or whispered.
+   */
+  taunt(text: string, vol: number, pan: number, p = 1.8, faction: Voice = 'gnome', seed = 0, prio = 0, name = '') {
     if (!this.tauntsOn || vol < 0.12) return;
     const now = performance.now();
-    if (now - this.lastTaunt < 2500) return;
+    if (prio === 0 && now - this.lastTaunt < 1100) return;
     const ss = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
     if (ss && typeof SpeechSynthesisUtterance !== 'undefined') {
-      if (ss.speaking || ss.pending) return;
+      if (ss.speaking || ss.pending) {
+        // a line that has been "speaking" for ages is a stuck engine: reset it
+        if (now - this.lastTaunt < 7000 && prio <= this.curPrio) return;
+        ss.cancel();
+      }
       this.lastTaunt = now;
+      this.curPrio = prio;
       const u = new SpeechSynthesisUtterance(text);
       const jitter = ((seed % 7) - 3) * 0.02;
       // moderate pitch shifts keep it sounding like a person (extreme ones sound like a chipmunk)
-      u.pitch = faction === 'gnome' ? Math.min(1.5, 1.05 + (p - 1.5) * 0.5 + jitter) : Math.max(0.5, Math.min(0.85, p * 0.9));
-      u.rate = (faction === 'gnome' ? 1.08 : 0.9) + jitter;
-      u.volume = Math.min(1, vol);
+      let pitch = faction === 'gnome' ? Math.min(1.5, 1.05 + (p - 1.5) * 0.5 + jitter) : faction === 'goblin' ? Math.max(0.5, Math.min(0.85, p * 0.9)) : 0.55;
+      let rate = (faction === 'gnome' ? 1.08 : faction === 'goblin' ? 0.9 : 1.02) + jitter;
+      let volume = Math.min(1, vol);
+      const r = Math.random();
+      if (r < 0.1 || /[A-Z]{4,}/.test(text)) { pitch = Math.min(2, pitch * 1.3); rate *= 1.25; volume = 1; } // screamed
+      else if (r < 0.17) rate *= 0.6; // drawled
+      else if (r < 0.22) { pitch *= 0.85; volume *= 0.55; } // whispered
+      u.pitch = pitch;
+      u.rate = rate;
+      u.volume = volume;
       const pool = this.voicePools();
       const list = pool ? pool[faction] : [];
       if (list.length) u.voice = list[seed % list.length];
+      u.onend = () => { this.curPrio = 0; };
       ss.speak(u);
+      this.onSpeak?.(name, text, faction);
       return;
     }
     this.lastTaunt = now;
+    this.onSpeak?.(name, text, faction);
     for (let i = 0; i < 4; i++) {
       const f = (400 + Math.random() * 500) * p;
       this.tone(0.14 * vol, f, f * (0.8 + Math.random() * 0.6), 0.07, 'square', pan, i * 0.09);

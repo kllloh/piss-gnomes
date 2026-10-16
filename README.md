@@ -1,4 +1,4 @@
-# Piss Gnomes: The Enchanted Forest
+﻿# Piss Gnomes: The Enchanted Forest
 
 A silly, psychedelic 50 v 50 first-person capture-the-zones game in a huge enchanted forest. Your only weapon is
 your bladder. Find potions and the stream changes what it does. Red-hat gnomes versus blue-cap gnomes; you play one
@@ -34,6 +34,7 @@ npm run build      # single self-contained dist/index.html you can double-click
   popped bugs come back after 40 seconds.
 - **Sound:** footsteps (boots, skittering legs, beetle thumps), jumps, splashing, a night-forest ambience and a
   generative music engine that plays weird scales in odd time signatures. The scale changes with your potion.
+- **Talking:** everyone never shuts up: gnomes shout when they spot you, get hit, burn, ride bugs (which have names), lose bugs, capture zones or just hallucinate. A deranged announcer commentates, and every minute or so a chaos event hits (moon gravity, rainbow rain, turbo pee, titan gnomes, bug stampede, disco speed). **V** shouts a battle cry.
 - **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. **T** cycles full / mild / off.
 - **Controls:** WASD move, Space jump, Shift walk, mouse aim, hold click to pee, E ride / hop off, Esc pause,
   M voices, N music, T trip level.

@@ -37,6 +37,8 @@ export class PeeSystem {
   private shooter: (Combatant | null)[] = new Array(MAX).fill(null);
   private count = 0;
   private acc = new Map<number, number>();
+  /** Chaos events: everybody's stream is stronger. */
+  rateMul = 1;
 
   constructor(scene: THREE.Scene) {
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0xffffff }), MAX);
@@ -58,7 +60,7 @@ export class PeeSystem {
 
   /** Emit this frame's share of a continuous stream. */
   emit(shooter: Combatant, origin: THREE.Vector3, dir: THREE.Vector3, kind: PeeKind, dt: number, spread = 0.03, rate = 1) {
-    const a = (this.acc.get(shooter.id) ?? 0) + dt * RATE * rate;
+    const a = (this.acc.get(shooter.id) ?? 0) + dt * RATE * rate * this.rateMul;
     const n = Math.floor(a);
     this.acc.set(shooter.id, a - n);
     const ki = KINDS.indexOf(kind);

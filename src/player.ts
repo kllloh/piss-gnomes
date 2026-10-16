@@ -8,7 +8,7 @@ export const PLAYER_HW = 0.3;
 export const PLAYER_H = 1.75;
 export const EYE = 1.6;
 
-const GRAVITY = 24;
+export const GRAVITY_BASE = 24;
 const JUMP = 7.5;
 const RUN = 5.6;
 
@@ -38,6 +38,7 @@ export class Player implements Rider {
   mount: Mount | null = null;
   hitR2?: number;
   hitH?: number;
+  gravityMul = 1; // chaos events
   roll = 0; // psychedelic camera sway, set by the game
   private keys = new Set<string>();
 
@@ -155,7 +156,7 @@ export class Player implements Rider {
     const steps = Math.max(1, Math.ceil(dt / 0.01));
     const h = dt / steps;
     for (let i = 0; i < steps; i++) {
-      this.vel.y = Math.max(-30, this.vel.y - GRAVITY * h);
+      this.vel.y = Math.max(-30, this.vel.y - GRAVITY_BASE * this.gravityMul * h);
       if (this.world.moveAxis(this.pos, hw, PLAYER_H, 'x', this.vel.x * h)) this.vel.x = 0;
       if (this.world.moveAxis(this.pos, hw, PLAYER_H, 'z', this.vel.z * h)) this.vel.z = 0;
       this.onGround = false;

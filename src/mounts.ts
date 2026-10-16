@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { randomBugName } from './talk';
 import { PEE, type Combatant, type PeeKind } from './combat';
 
 export type MountType = 'spider' | 'beetle' | 'ladybug';
@@ -39,6 +40,8 @@ export class Mount {
   readonly group = new THREE.Group();
   readonly pos = new THREE.Vector3();
   readonly home = new THREE.Vector3();
+  /** Every bug has a name. Its rider will scream it. */
+  readonly petName = randomBugName();
   yaw = 0;
   hp: number;
   readonly maxHp: number;

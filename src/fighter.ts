@@ -9,6 +9,7 @@ import { DROP_SPEED, GRAVITY, type PeeSystem } from './pee';
 import type { Zone, Zones } from './zones';
 import type { Pickup, Potions } from './potions';
 import type { Mount, Mounts, Rider } from './mounts';
+import type { SayCtx } from './talk';
 
 const HW = 0.3;
 const H = 1.4;
@@ -116,6 +117,10 @@ export class Fighter implements Rider {
   /** Set by the game once; lets hits and deaths reach the world. */
   static ctx: FightCtx | null = null;
   static onHurt: ((f: Fighter) => void) | null = null;
+  /** Something worth saying out loud happened to this fighter. */
+  static onSay: ((f: Fighter, ctx: SayCtx) => void) | null = null;
+  /** Chaos events can make everybody huge. */
+  static size = 1;
 
   readonly id = nextId++;
   readonly isPlayer = false;
@@ -221,6 +226,7 @@ export class Fighter implements Rider {
     this.hp -= amount;
     if (this.hp <= 0) { this.die(kind, from); return; }
     Fighter.onHurt?.(this);
+    Fighter.onSay?.(this, kind === 'fire' ? 'burn' : this.hp < 25 ? 'lowhp' : 'hit');
     if (from && !this.target && from.alive && from.team !== this.team) this.target = from; // turn on whoever is peeing on us
   }
 
@@ -339,6 +345,7 @@ export class Fighter implements Rider {
       }
     }
     scored.sort((a, b) => a.s - b.s);
+    const prev = this.target;
     this.target = null;
     eye.set(this.pos.x, 0.9, this.pos.z);
     for (let i = 0; i < Math.min(3, scored.length); i++) {
@@ -348,7 +355,11 @@ export class Fighter implements Rider {
       const dz = t.pos.z - eye.z;
       const d = Math.hypot(dx, dy, dz);
       dirV.set(dx / d, dy / d, dz / d);
-      if (c.world.raycast(eye, dirV, d) >= d - 0.6) { this.target = t; return; }
+      if (c.world.raycast(eye, dirV, d) >= d - 0.6) {
+        if (!prev && t.team !== this.team) Fighter.onSay?.(this, 'spot');
+        this.target = t;
+        return;
+      }
     }
   }
 
@@ -446,6 +457,7 @@ export class Fighter implements Rider {
     if (this.mountGoal && (this.mount || !this.mountGoal.alive || this.mountGoal.rider)) this.mountGoal = null;
     if (this.mountGoal && Math.hypot(this.mountGoal.pos.x - this.pos.x, this.mountGoal.pos.z - this.pos.z) < 2) {
       c.mounts.board(this.mountGoal, this);
+      Fighter.onSay?.(this, 'mount');
       this.mountGoal = null;
       this.path = [];
     }
@@ -566,7 +578,11 @@ export class Fighter implements Rider {
   private sync() {
     this.group.position.copy(this.pos);
     if (this.mount) this.group.position.y += this.mount.def.lift;
-    if (this.alive) this.group.rotation.y = this.yaw;
+    if (this.alive) {
+      this.group.rotation.y = this.yaw;
+      const sz = Fighter.size;
+      if (this.group.scale.x !== sz) this.group.scale.set(sz, sz, sz);
+    }
     if (this.shown) {
       const v = Fighter.ctx!.viewer;
       const dx = this.pos.x - v.x;
