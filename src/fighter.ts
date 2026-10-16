@@ -336,7 +336,7 @@ export class Fighter implements Rider {
     c.grid.query(this.pos.x, this.pos.z, healer ? 18 : 34, cand);
     const scored: { t: Combatant; s: number }[] = [];
     for (const t of cand) {
-      if (!t.alive || t === this) continue;
+      if (!t.alive || t === this || t.isNpc) continue;
       const d = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
       if (healer && t.team === this.team) {
         if (t.hp < t.maxHp * 0.8) scored.push({ t, s: d - 30 }); // hurt friends come first

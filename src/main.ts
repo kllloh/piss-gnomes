@@ -13,6 +13,7 @@ import { Sound } from './audio';
 import { Music } from './music';
 import { Trip } from './trip';
 import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } from './talk';
+import { Rory } from './rory';
 import { Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
 
@@ -110,6 +111,17 @@ const mountSpots: MountSpot[] = [];
 }
 const mounts = new Mounts(scene, mountSpots);
 
+// Rory: big, blond, unkillable
+const rory = new Rory(scene, world, nav, (text) => {
+  const sp = sound.spatial(rory.pos.x, rory.pos.z);
+  sound.taunt(text, sp.vol, sp.pan, 0.5, 'goblin', 1, 2, 'Rory');
+});
+{
+  let spot = new THREE.Vector3(0, 0, 8);
+  for (let k = 0; k < 40 && !nav.isFreeAt(spot.x, spot.z); k++) spot = new THREE.Vector3((Math.random() - 0.5) * 24, 0, (Math.random() - 0.5) * 24);
+  rory.spawn(spot);
+}
+
 // --- HUD ---------------------------------------------------------------------------------
 const $ = (id: string) => document.getElementById(id)!;
 const elTix = $('tix');
@@ -190,7 +202,7 @@ function buildFighters() {
 let chatterT = 0;
 const VOICE_COLOURS = { gnome: '#ff9a9a', goblin: '#9ac4ff', announcer: '#ffe45c' } as const;
 sound.onSpeak = (name, text, voice) => {
-  const colour = name === 'You' ? '#ffffff' : VOICE_COLOURS[voice];
+  const colour = name === 'You' ? '#ffffff' : name === 'Rory' ? '#ffd070' : VOICE_COLOURS[voice];
   elChatter.innerHTML = `<b style="color:${colour}">${name || '???'}</b> ${text}`;
   elChatter.style.opacity = '1';
   chatterT = 3.6;
@@ -316,7 +328,7 @@ const chainBuf: Combatant[] = [];
 function spreadPoison(from: Combatant) {
   grid.query(from.pos.x, from.pos.z, 3, nearBuf);
   for (const o of nearBuf) {
-    if (o === from || !o.alive || o.status.poison > 0) continue;
+    if (o === from || !o.alive || o.isNpc || o.status.poison > 0) continue;
     o.status.poison = 6;
     o.status.poisonBy = from.status.poisonBy;
     break;
@@ -325,6 +337,7 @@ function spreadPoison(from: Combatant) {
 
 /** One droplet landed on `victim`. */
 function applyHit(victim: Combatant, kind: PeeKind, shooter: Combatant, at: THREE.Vector3) {
+  if (victim.isNpc) { victim.hurt(0, kind, shooter); return; } // Rory laughs it off
   const st = victim.status;
   if (kind === 'heal') {
     victim.heal(1.5);
@@ -372,7 +385,7 @@ function applyHit(victim: Combatant, kind: PeeKind, shooter: Combatant, at: THRE
         let jumps = 0;
         for (const o of chainBuf) {
           if (jumps >= 2) break;
-          if (o === victim || !o.alive || o.team !== victim.team) continue;
+          if (o === victim || !o.alive || o.isNpc || o.team !== victim.team) continue;
           jumps++;
           o.hurt(PEE.shock.dmg * 0.7 * (o.status.wet > 0 ? 2 : 1) * 3, 'shock', shooter);
           fx.tracer(new THREE.Vector3(victim.pos.x, victim.pos.y + 1, victim.pos.z), new THREE.Vector3(o.pos.x, o.pos.y + 1, o.pos.z), 0xfff27a);
@@ -676,6 +689,10 @@ function renderHud() {
     miniCtx.fillStyle = hex(PEE[p.kind].color);
     miniCtx.fillRect(mx(p.pos.x) - 1.5, mz(p.pos.z) - 1.5, 3, 3);
   }
+  miniCtx.fillStyle = '#ffd070';
+  miniCtx.beginPath();
+  miniCtx.arc(mx(rory.pos.x), mz(rory.pos.z), 4, 0, Math.PI * 2);
+  miniCtx.fill();
   for (const m of mounts.list) {
     if (!m.alive || m.rider) continue;
     miniCtx.fillStyle = '#ff60e0';
@@ -770,6 +787,17 @@ function movementSounds(dt: number) {
     lowBladderT -= dt;
     if (firing && player.bladder < 14 && lowBladderT <= 0) { lowBladderT = 1; sound.lowBladder(); }
   }
+  rory.stepAcc += rory.speedNow * dt;
+  if (rory.stepAcc > 2.6) {
+    rory.stepAcc = 0;
+    const dx = rory.pos.x - player.pos.x;
+    const dz = rory.pos.z - player.pos.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 30) {
+      const sp = sound.spatial(rory.pos.x, rory.pos.z);
+      sound.step(sp.vol * (1 - dist / 30) * 1.2, sp.pan, 2);
+    }
+  }
   stepBudget = 4;
   for (const f of fighters) {
     if (!f.alive || f.speedNow < 1) continue;
@@ -817,6 +845,7 @@ function simulate(dt: number) {
 
   grid.clear();
   for (const c of everyone) if (c.alive) grid.insert(c);
+  grid.insert(rory);
 
   const hpBefore = player.hp;
   player.update(dt);
@@ -829,6 +858,7 @@ function simulate(dt: number) {
   if (player.alive && player.hp < hpBefore - 0.5) sound.hurt();
 
   for (const f of fighters) f.update(dt, fightCtx);
+  rory.update(dt, player);
   mounts.update(dt, time);
   movementSounds(dt);
   pee.update(dt, {
@@ -963,7 +993,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
+  rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   setFaction, newMatch, applyHit, respawnPoint, sim: simulate,

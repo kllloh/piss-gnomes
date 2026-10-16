@@ -44,6 +44,8 @@ export interface Combatant {
   potion: PotionState | null;
   bladder: number;
   /** Wider/taller hit box while riding a bug (squared radius, height). */
+  /** Scenery with a pulse (Rory): hit by everyone's pee, hurt by nobody's, ignored by the bots. */
+  isNpc?: boolean;
   hitR2?: number;
   hitH?: number;
   /** Direct hit: reacts and may alert. */

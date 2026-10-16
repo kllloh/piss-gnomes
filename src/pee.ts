@@ -120,7 +120,7 @@ export class PeeSystem {
       for (let k = 0; k < near.length; k++) {
         const t = near[k];
         if (!t.alive || t === shooter) continue;
-        if (kind === 'heal' ? t.team !== shooter.team : t.team === shooter.team) continue; // heal goes to friends, the rest to enemies
+        if (t.isNpc ? kind === 'heal' : kind === 'heal' ? t.team !== shooter.team : t.team === shooter.team) continue; // heal goes to friends, the rest to enemies
         const dx = t.pos.x - x;
         const dz = t.pos.z - z;
         if (dx * dx + dz * dz < (t.hitR2 ?? 0.3) && y > t.pos.y && y < t.pos.y + (t.hitH ?? 1.6)) { hit = t; break; }

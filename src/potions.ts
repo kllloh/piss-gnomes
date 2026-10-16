@@ -88,7 +88,7 @@ export class Potions {
       p.halo.scale.set(s, s * 1.4, s);
       grid.query(p.pos.x, p.pos.z, 1.7, near);
       for (const who of near) {
-        if (!who.alive) continue;
+        if (!who.alive || who.isNpc) continue;
         p.active = false;
         p.group.visible = false;
         p.respawnT = 30;
