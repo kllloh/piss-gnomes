@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SoftBox, toon } from './organic';
+import { SoftBox, lit } from './organic';
 import { randomBugName } from './talk';
 import { PEE, type Combatant, type PeeKind } from './combat';
 
@@ -65,11 +65,11 @@ export class Mount {
     this.pos.copy(home);
     const def = MOUNT_DEFS[type];
     this.hp = this.maxHp = def.hp;
-    this.bodyMat = toon({ color: 0xffffff });
-    const darkMat = toon({ color: type === 'ladybug' ? 0x161616 : 0x2a1636 });
+    this.bodyMat = lit({ color: 0xffffff });
+    const darkMat = lit({ color: type === 'ladybug' ? 0x161616 : 0x2a1636 });
     this.glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.tipMat = new THREE.MeshBasicMaterial({ color: 0xf2d83a });
-    const saddleMat = toon({ color: 0x7a2a3a });
+    const saddleMat = lit({ color: 0x7a2a3a });
     const box = (m: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, parent: THREE.Object3D = this.group) => {
       const mesh = new THREE.Mesh(boxGeo, m);
       mesh.scale.set(w, h, d);

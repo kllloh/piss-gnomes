@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SoftBox, toon, makePaintTexture } from './organic';
+import { SoftBox, lit, makePaintTexture } from './organic';
 
 export interface AABB {
   min: THREE.Vector3;
@@ -96,7 +96,7 @@ export class World {
   private mat(color: number): THREE.MeshLambertMaterial {
     let m = this.mats.get(color);
     if (!m) {
-      m = toon({ color, map: this.tex });
+      m = lit({ color, map: this.tex });
       this.mats.set(color, m);
     }
     return m;

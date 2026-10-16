@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SoftBox, toon } from './organic';
+import { SoftBox, lit } from './organic';
 import { World } from './world';
 import { makePaintTexture } from './organic';
 
@@ -76,8 +76,8 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
 
   // --- ground ---------------------------------------------------------------------
   const gtex = makePaintTexture(150);
-  gtex.repeat.set(120, 120);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), toon({ color: 0x2f6e55, map: gtex }));
+  gtex.repeat.set(200, 200);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), lit({ color: 0x2f6e55, map: gtex }));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   world.group.add(ground);
@@ -132,8 +132,8 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
     });
     remember(x, z);
   }
-  const trunks = instanced(new SoftBox(1, 1, 1), toon({ color: 0xffffff }), trees.length);
-  const canopy = [0, 1, 2].map(() => instanced(new SoftBox(1, 1, 1), toon({ color: 0xffffff }), trees.length));
+  const trunks = instanced(new THREE.CylinderGeometry(0.5, 0.5, 1, 6), lit({ color: 0xffffff }), trees.length);
+  const canopy = [0, 1, 2].map(() => instanced(new THREE.IcosahedronGeometry(0.62, 0), lit({ color: 0xffffff, flatShading: true }), trees.length));
   trees.forEach((t, i) => {
     put(trunks, i, t.x, t.h / 2, t.z, t.w, t.h, t.w, 0, pick([0x5a3a52, 0x4a3448, 0x6a4658]));
     for (let l = 0; l < 3; l++) {
@@ -151,8 +151,8 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
 
   // --- small glowing mushrooms ------------------------------------------------------
   const smallN = 300;
-  const stems = instanced(new SoftBox(1, 1, 1), toon({ color: 0xf2e8d0 }), smallN);
-  const caps = instanced(new SoftBox(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }), smallN);
+  const stems = instanced(new THREE.CylinderGeometry(0.5, 0.5, 1, 6), lit({ color: 0xf2e8d0 }), smallN);
+  const caps = instanced(new THREE.ConeGeometry(0.62, 1, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), smallN);
   for (let i = 0; i < smallN; i++) {
     const x = between(-HALF + 4, HALF - 4);
     const z = between(-HALF + 4, HALF - 4);
@@ -180,8 +180,8 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
     addGiant(x, z);
     remember(x, z);
   }
-  const gStem = instanced(new SoftBox(1, 1, 1), toon({ color: 0xf0e4d2 }), giants.length);
-  const gCap = instanced(new SoftBox(1, 1, 1), toon({ color: 0xffffff }), giants.length);
+  const gStem = instanced(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), lit({ color: 0xf0e4d2 }), giants.length);
+  const gCap = instanced(new THREE.ConeGeometry(0.62, 1, 10), lit({ color: 0xffffff, flatShading: true }), giants.length);
   const gSpots = instanced(new SoftBox(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xfff6e0 }), giants.length * 3);
   giants.forEach((g, i) => {
     const sw = 1.7 * g.s;
@@ -207,7 +207,7 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
     rockList.push({ x, z, w: between(2, 4.4), h: between(1.2, 3), d: between(2, 4.4) });
     remember(x, z);
   }
-  const rocks = instanced(new SoftBox(1, 1, 1), toon({ color: 0xffffff }), rockList.length);
+  const rocks = instanced(new THREE.IcosahedronGeometry(0.6, 0), lit({ color: 0xffffff, flatShading: true }), rockList.length);
   rockList.forEach((r, i) => {
     put(rocks, i, r.x, r.h / 2, r.z, r.w, r.h, r.d, 0, pick([0x7a7f8c, 0x6a6f7c, 0x8a8f9c]));
     world.addCollider(new THREE.Vector3(r.x - r.w / 2, 0, r.z - r.d / 2), new THREE.Vector3(r.x + r.w / 2, r.h, r.z + r.d / 2));
@@ -224,7 +224,7 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
     logList.push({ x, z, w: alongX ? between(6, 9) : 1.4, d: alongX ? 1.4 : between(6, 9) });
     remember(x, z);
   }
-  const logs = instanced(new SoftBox(1, 1, 1), toon({ color: 0xffffff }), logList.length);
+  const logs = instanced(new SoftBox(1, 1, 1), lit({ color: 0xffffff }), logList.length);
   logList.forEach((l, i) => {
     put(logs, i, l.x, 0.55, l.z, l.w, 1.1, l.d, 0, pick([0x5a3a30, 0x6a4a3a]));
     world.addCollider(new THREE.Vector3(l.x - l.w / 2, 0, l.z - l.d / 2), new THREE.Vector3(l.x + l.w / 2, 1.1, l.z + l.d / 2));
@@ -234,7 +234,7 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
 
   // --- Crystal Grove (zone 2) -----------------------------------------------------------
   const crystalN = 34;
-  const crystals = instanced(new SoftBox(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 }), crystalN);
+  const crystals = instanced(new THREE.OctahedronGeometry(0.62, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 }), crystalN);
   for (let i = 0; i < crystalN; i++) {
     const a = rnd() * Math.PI * 2;
     const r = between(13, 28);

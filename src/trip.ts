@@ -41,6 +41,7 @@ void main() {
   float h = hash(g);
   float star = step(0.985, h) * (0.5 + 0.5 * sin(time * 3.0 + h * 50.0));
   col += star * smoothstep(0.05, 0.4, d.y);
+  col = floor(col * 9.0 + 0.5) / 9.0; // banded like a low-colour skybox
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -93,16 +94,20 @@ void main() {
   col += amp * pulse * 0.05 * vec3(1.0, 0.3, 0.8);
   col = max(col, 0.0);
   if (ink > 0.0) {
-    // --- painted look: flat colour washes ---
-    vec2 res2 = res; // (kept so the uniform stays used)
-    // paint: soften the colour into flat washes, with a hint of warm paper
-    vec3 pcol = sqrt(col);
-    pcol = mix(pcol, floor(pcol * 7.0 + 0.5) / 7.0, 0.45 * ink);
-    float blotch = vnoise(vUv * vec2(9.0, 6.0) * 2.0);
-    pcol *= 1.0 - ink * 0.06 * blotch;
-    pcol = mix(pcol, pcol * vec3(1.05, 1.0, 0.92), 0.4 * ink);
-    pcol += res2.x * 0.0;
-    col = pcol * pcol;
+    // --- PlayStation 2 look: low-res picture, a little bloom, saturated colour, 5-bit colour with an ordered dither ---
+    vec2 px = 1.0 / res;
+    vec3 glow = texture2D(tDiffuse, vUv + px * vec2(2.0, 0.0)).rgb + texture2D(tDiffuse, vUv - px * vec2(2.0, 0.0)).rgb
+              + texture2D(tDiffuse, vUv + px * vec2(0.0, 2.0)).rgb + texture2D(tDiffuse, vUv - px * vec2(0.0, 2.0)).rgb;
+    col += max(glow * 0.25 - 0.6, 0.0) * 0.4 * ink;
+    float l = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(l), col, 1.0 + 0.3 * ink);
+    vec2 q = mod(floor(vUv * res), 4.0);
+    float ba = mod(q.x, 2.0), bb = floor(q.x / 2.0), bc = mod(q.y, 2.0), bd = floor(q.y / 2.0);
+    float bayer = (8.0 * abs(ba - bc) + 4.0 * bc + 2.0 * abs(bb - bd) + bd) / 16.0;
+    vec3 pc = sqrt(col);
+    pc = floor((pc + (bayer - 0.5) / 14.0) * 31.0 + 0.5) / 31.0;
+    col = pc * pc;
+    col *= 1.0 - 0.07 * ink * step(0.5, fract(vUv.y * res.y * 0.5)); // faint interlace lines
   }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -112,8 +117,16 @@ void main() {
 export class Trip {
   /** 0 = off, 1 = mild, 2 = full. */
   level = 2;
-  /** Hand-drawn ink and paper look, 0..1. */
-  ink = 1;
+  private _ink = 1;
+  /** PlayStation 2 look, 0..1: 480p picture, dither, bloom. */
+  get ink(): number {
+    return this._ink;
+  }
+  set ink(v: number) {
+    const changed = v > 0 !== this._ink > 0;
+    this._ink = v;
+    if (changed && this.rt) this.makeTarget();
+  }
   private rt: THREE.WebGLRenderTarget | null = null;
   private quad: THREE.Mesh | null = null;
   private quadScene = new THREE.Scene();
@@ -181,10 +194,23 @@ export class Trip {
 
   private makeTarget() {
     this.renderer.getDrawingBufferSize(this.size);
+    let w = this.size.x;
+    let h = this.size.y;
+    const ps2 = this._ink > 0;
+    if (ps2) { // render at roughly 480p and let the pixels show
+      const k = Math.min(1, 480 / h);
+      w = Math.max(8, Math.round(w * k));
+      h = Math.max(8, Math.round(h * k));
+    }
     this.rt?.dispose();
-    this.rt = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { type: THREE.HalfFloatType, samples: 4 });
+    this.rt = new THREE.WebGLRenderTarget(w, h, {
+      type: THREE.HalfFloatType,
+      samples: ps2 ? 0 : 4,
+      magFilter: ps2 ? THREE.NearestFilter : THREE.LinearFilter,
+      minFilter: ps2 ? THREE.NearestFilter : THREE.LinearFilter,
+    });
     this.uniforms.tDiffuse.value = this.rt.texture;
-    this.uniforms.res.value.set(this.size.x, this.size.y);
+    this.uniforms.res.value.set(w, h);
   }
 
   resize() {

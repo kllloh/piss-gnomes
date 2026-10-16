@@ -10,9 +10,14 @@ function hash3(x: number, y: number, z: number): number {
  * wobble so no two edges are quite straight. It is a BoxGeometry underneath, so anything that merges
  * or measures boxes still works. `round` is the corner radius as a fraction of the shortest side.
  */
+/** 0 = plain hard-edged boxes (PlayStation 2 look). Raise it for pillowy shapes. */
+export const SOFTNESS = 0;
+
 export class SoftBox extends THREE.BoxGeometry {
   constructor(w = 1, h = 1, d = 1, round = 0.34, wobble = 0.04) {
-    super(w, h, d, 3, 3, 3);
+    super(w, h, d, SOFTNESS > 0 ? 3 : 1, SOFTNESS > 0 ? 3 : 1, SOFTNESS > 0 ? 3 : 1);
+    if (SOFTNESS <= 0) return;
+    round *= SOFTNESS;
     const hx = w / 2;
     const hy = h / 2;
     const hz = d / 2;
@@ -49,52 +54,33 @@ export class SoftBox extends THREE.BoxGeometry {
   }
 }
 
-/** A 4-step light ramp, so shading falls in flat patches like a painted cartoon. */
-const ramp = new Uint8Array([88, 150, 210, 255]);
-const gradient = new THREE.DataTexture(ramp, ramp.length, 1, THREE.RedFormat);
-gradient.minFilter = gradient.magFilter = THREE.NearestFilter;
-gradient.generateMipmaps = false;
-gradient.needsUpdate = true;
-
-/**
- * The game's one material: cel-shaded. It stands in for a Lambert material (same colour/emissive/map
- * options), so the rest of the code does not care.
- */
-export function toon(params: THREE.MeshToonMaterialParameters = {}): THREE.MeshLambertMaterial {
-  return new THREE.MeshToonMaterial({ gradientMap: gradient, ...params }) as unknown as THREE.MeshLambertMaterial;
+/** The game's one material: plain lit colour, like a PS2 vertex-lit surface. */
+export function lit(params: THREE.MeshLambertMaterialParameters = {}): THREE.MeshLambertMaterial {
+  return new THREE.MeshLambertMaterial(params);
 }
 
-/** A tileable "brush strokes on paper" texture, used for the ground and for stone and wood. */
-export function makePaintTexture(lo = 170, size = 128): THREE.CanvasTexture {
+/** A tiny, chunky, low-res texture (nearest-neighbour, so the pixels show), used for ground, stone and wood. */
+export function makePaintTexture(lo = 170, size = 32): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = `rgb(${Math.round((lo + 255) / 2)},${Math.round((lo + 255) / 2)},${Math.round((lo + 255) / 2)})`;
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 260; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const v = lo + Math.floor(Math.random() * (255 - lo));
-    const alpha = 0.18 + Math.random() * 0.25;
-    const width = 2 + Math.random() * 7;
-    const a = Math.random() * Math.PI;
-    const len = 8 + Math.random() * 26;
-    ctx.strokeStyle = `rgba(${v},${v},${v},${alpha})`;
-    ctx.lineWidth = width;
-    ctx.lineCap = 'round';
-    // draw wrapped copies near the edges so the tile has no seams
-    for (const ox of [-size, 0, size]) {
-      for (const oy of [-size, 0, size]) {
-        ctx.beginPath();
-        ctx.moveTo(x + ox, y + oy);
-        ctx.quadraticCurveTo(x + ox + Math.cos(a + 0.7) * len * 0.6, y + oy + Math.sin(a + 0.7) * len * 0.6, x + ox + Math.cos(a) * len, y + oy + Math.sin(a) * len);
-        ctx.stroke();
-      }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const v = lo + Math.floor(Math.random() * (255 - lo));
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(x, y, 1, 1);
     }
+  }
+  // a few 2x2 and 3x2 clumps, the way old game textures have
+  for (let i = 0; i < size * 1.4; i++) {
+    const v = lo + Math.floor(Math.random() * (255 - lo));
+    ctx.fillStyle = `rgb(${v},${v},${v})`;
+    ctx.fillRect(Math.floor(Math.random() * size), Math.floor(Math.random() * size), 2 + Math.floor(Math.random() * 2), 2);
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestMipmapLinearFilter;
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
   return t;
 }

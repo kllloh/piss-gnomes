@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SoftBox, toon } from './organic';
+import { SoftBox, lit } from './organic';
 import { PEE, type Combatant, type PeeKind, type SpatialGrid } from './combat';
 import type { World } from './world';
 
@@ -41,8 +41,8 @@ const up = new THREE.Vector3(0, 1, 0);
 /** Build the little yellow jug used both as a pickup and as the thrown grenade. */
 function makeJug(color: number): THREE.Group {
   const g = new THREE.Group();
-  const glass = toon({ color: 0xf2c31a });
-  const dark = toon({ color: 0x6a4a2a });
+  const glass = lit({ color: 0xf2c31a });
+  const dark = lit({ color: 0x6a4a2a });
   const body = new THREE.Mesh(new SoftBox(0.4, 0.5, 0.34), glass);
   const neck = new THREE.Mesh(new SoftBox(0.2, 0.2, 0.18), glass);
   neck.position.y = 0.33;
@@ -58,8 +58,8 @@ function makeJug(color: number): THREE.Group {
 
 function makeSniper(): THREE.Group {
   const g = new THREE.Group();
-  const metal = toon({ color: 0x3a3340 });
-  const wood = toon({ color: 0x8a5a30 });
+  const metal = lit({ color: 0x3a3340 });
+  const wood = lit({ color: 0x8a5a30 });
   const barrel = new THREE.Mesh(new SoftBox(0.09, 0.09, 1.1), metal);
   barrel.position.z = -0.25;
   const stock = new THREE.Mesh(new SoftBox(0.14, 0.2, 0.45), wood);
@@ -68,7 +68,7 @@ function makeSniper(): THREE.Group {
   scope.position.set(0, 0.13, 0);
   const lens = new THREE.Mesh(new SoftBox(0.08, 0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0x19e3ff }));
   lens.position.set(0, 0.13, -0.19);
-  const flask = new THREE.Mesh(new SoftBox(0.24, 0.3, 0.22), toon({ color: 0xf2c31a }));
+  const flask = new THREE.Mesh(new SoftBox(0.24, 0.3, 0.22), lit({ color: 0xf2c31a }));
   flask.position.set(0, -0.22, 0.05);
   g.add(barrel, stock, scope, lens, flask);
   g.scale.setScalar(1.05);
@@ -77,12 +77,12 @@ function makeSniper(): THREE.Group {
 
 function makeLauncher(): THREE.Group {
   const g = new THREE.Group();
-  const tube = new THREE.Mesh(new SoftBox(0.34, 0.34, 1.0), toon({ color: 0x4a7a3a }));
-  const mouth = new THREE.Mesh(new SoftBox(0.42, 0.42, 0.14), toon({ color: 0x2a3a22 }));
+  const tube = new THREE.Mesh(new SoftBox(0.34, 0.34, 1.0), lit({ color: 0x4a7a3a }));
+  const mouth = new THREE.Mesh(new SoftBox(0.42, 0.42, 0.14), lit({ color: 0x2a3a22 }));
   mouth.position.z = -0.55;
-  const flask = new THREE.Mesh(new SoftBox(0.34, 0.4, 0.3), toon({ color: 0xf2c31a }));
+  const flask = new THREE.Mesh(new SoftBox(0.34, 0.4, 0.3), lit({ color: 0xf2c31a }));
   flask.position.set(0, 0.36, 0.1);
-  const grip = new THREE.Mesh(new SoftBox(0.12, 0.3, 0.14), toon({ color: 0x6a4a2a }));
+  const grip = new THREE.Mesh(new SoftBox(0.12, 0.3, 0.14), lit({ color: 0x6a4a2a }));
   grip.position.set(0, -0.3, 0.1);
   g.add(tube, mouth, flask, grip);
   g.scale.setScalar(0.9);

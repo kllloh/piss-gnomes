@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SoftBox, toon } from './organic';
+import { SoftBox, lit } from './organic';
 import { PEE, POTION_KINDS, POTION_TIME, type Combatant, type PeeKind, type SpatialGrid } from './combat';
 
 export interface Pickup {
@@ -25,7 +25,7 @@ export class Potions {
     const neckGeo = new SoftBox(0.2, 0.26, 0.2);
     const corkGeo = new SoftBox(0.24, 0.12, 0.24);
     const haloGeo = new SoftBox(1, 1, 1);
-    const corkMat = toon({ color: 0x8a5a2a });
+    const corkMat = lit({ color: 0x8a5a2a });
     for (const s of spots) {
       const group = new THREE.Group();
       const body = new THREE.Mesh(bodyGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));

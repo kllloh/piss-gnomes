@@ -62,7 +62,7 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c2a44);
-const fog = new THREE.Fog(0x213a52, 30, 150);
+const fog = new THREE.Fog(0x213a52, 22, 125);
 scene.fog = fog;
 const hemi = new THREE.HemisphereLight(0x9fc4ff, 0x2a4a3a, 1.35);
 scene.add(hemi);
@@ -674,7 +674,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyH') {
     trip.ink = trip.ink > 0 ? 0 : 1;
-    banner(trip.ink > 0 ? 'ART: PAINTED' : 'ART: PLAIN', 1.2);
+    banner(trip.ink > 0 ? 'ART: PS2' : 'ART: HD', 1.2);
   }
   if (e.code === 'KeyN') {
     music.setEnabled(!music.on);
