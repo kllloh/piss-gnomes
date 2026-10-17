@@ -24,6 +24,25 @@ varying vec3 vDir;
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 void main() {
   vec3 d = normalize(vDir);
+  if (hot > 1.5) {
+    // Mushroom Hollow: a deep violet cavern sky with aurora curtains and drifting spore-stars
+    vec3 hz = vec3(0.55, 0.1, 0.6);
+    vec3 zn = vec3(0.04, 0.02, 0.2);
+    vec3 c = mix(hz, zn, smoothstep(0.0, 0.9, d.y));
+    float cur = smoothstep(0.55, 1.0, sin(d.x * 4.0 + sin(d.z * 3.0 + time * 0.3) * 1.5 + d.y * 6.0 + time * 0.4));
+    vec3 aur = mix(vec3(0.1, 1.0, 0.8), vec3(1.0, 0.2, 0.8), 0.5 + 0.5 * sin(d.y * 5.0 + time * 0.5));
+    c += aur * cur * 0.5 * smoothstep(0.05, 0.5, d.y);
+    vec3 gg = floor(d * 70.0);
+    float hh = hash(gg);
+    c += step(0.975, hh) * (0.5 + 0.5 * sin(time * 2.0 + hh * 40.0)) * vec3(0.8, 1.0, 0.9) * smoothstep(0.02, 0.4, d.y);
+    vec3 mm = normalize(vec3(-0.5, 0.5, -0.7));
+    float md = acos(clamp(dot(d, mm), -1.0, 1.0));
+    c = mix(c, vec3(0.9, 0.85, 1.0), smoothstep(0.17, 0.15, md));
+    c += 0.1 * (0.5 + 0.5 * sin(md * 30.0 - time * 2.0)) * smoothstep(0.6, 0.15, md) * vec3(0.7, 0.5, 1.0);
+    c = floor(c * 9.0 + 0.5) / 9.0;
+    gl_FragColor = vec4(c, 1.0);
+    return;
+  }
   if (hot > 0.5) {
     // Desert Trip: a hot, bright, swirling day sky
     vec3 base = mix(vec3(1.0, 0.72, 0.3), vec3(0.15, 0.75, 1.0), smoothstep(-0.05, 0.85, d.y));
@@ -133,14 +152,14 @@ void main() {
 export class Trip {
   /** 0 = off, 1 = mild, 2 = full. */
   level = 2;
-  private _theme: 'forest' | 'desert' = 'forest';
+  private _theme: 'forest' | 'desert' | 'mush' = 'forest';
   private _style: 'ps2' | 'hd' = 'ps2';
   get theme() {
     return this._theme;
   }
-  set theme(v: 'forest' | 'desert') {
+  set theme(v: 'forest' | 'desert' | 'mush') {
     this._theme = v;
-    (this.sky.material as THREE.ShaderMaterial).uniforms.hot.value = v === 'desert' ? 1 : 0;
+    (this.sky.material as THREE.ShaderMaterial).uniforms.hot.value = v === 'desert' ? 1 : v === 'mush' ? 2 : 0;
   }
   get style() {
     return this._style;
@@ -252,6 +271,7 @@ export class Trip {
 
   /** Match the fog to the horizon colour of the sky so distance fades into the swirl. */
   horizon(t: number, out: THREE.Color): THREE.Color {
+    if (this._theme === 'mush') return out.setRGB(0.2, 0.07, 0.3);
     if (this._theme === 'desert') return out.setRGB(0.99, 0.8, 0.52).lerp(palette(t * 0.05, new THREE.Color()), 0.1);
     palette(t * 0.03, out).multiplyScalar(0.22);
     return out;

@@ -41,7 +41,7 @@ const tmp = new THREE.Vector3();
 const up = new THREE.Vector3(0, 1, 0);
 
 /** Build the little yellow jug used both as a pickup and as the thrown grenade. */
-function makeJug(color: number): THREE.Group {
+export function makeJug(color: number): THREE.Group {
   const g = new THREE.Group();
   const glass = lit({ color: 0xf2c31a });
   const dark = lit({ color: 0x6a4a2a });
@@ -58,7 +58,7 @@ function makeJug(color: number): THREE.Group {
   return g;
 }
 
-function makeSniper(): THREE.Group {
+export function makeSniper(): THREE.Group {
   const g = new THREE.Group();
   const metal = lit({ color: 0x3a3340 });
   const wood = lit({ color: 0x8a5a30 });
@@ -77,7 +77,7 @@ function makeSniper(): THREE.Group {
   return g;
 }
 
-function makeLauncher(): THREE.Group {
+export function makeLauncher(): THREE.Group {
   const g = new THREE.Group();
   const tube = new THREE.Mesh(new SoftBox(0.34, 0.34, 1.0), lit({ color: 0x4a7a3a }));
   const mouth = new THREE.Mesh(new SoftBox(0.42, 0.42, 0.14), lit({ color: 0x2a3a22 }));
@@ -97,7 +97,7 @@ function at(m: THREE.Mesh, x: number, y: number, z: number): THREE.Mesh {
   return m;
 }
 
-function makeHealth(): THREE.Group {
+export function makeHealth(): THREE.Group {
   const g = new THREE.Group();
   g.add(new THREE.Mesh(new SoftBox(0.56, 0.42, 0.28), lit({ color: 0xf7f4ec })));
   const red = new THREE.MeshBasicMaterial({ color: 0xe0203a });
@@ -121,7 +121,7 @@ function makeArmor(): THREE.Group {
   return g;
 }
 
-function makeDouble(): THREE.Group {
+export function makeDouble(): THREE.Group {
   const g = new THREE.Group();
   for (const x of [-0.3, 0.3]) {
     const j = makeJug(0xffa030);
@@ -132,7 +132,7 @@ function makeDouble(): THREE.Group {
   return g;
 }
 
-function makeSwirl(): THREE.Group {
+export function makeSwirl(): THREE.Group {
   const g = new THREE.Group();
   for (let i = 0; i < 9; i++) {
     const a = i * 0.9;

@@ -147,7 +147,8 @@ export class Mount {
   /** The rider's pee hits the bug first. Returns true if that finished it off. */
   damage(amount: number, kind: PeeKind, from: Combatant | null): boolean {
     if (!this.alive) return false;
-    this.hp -= amount * 0.6;
+    // bugs ridden by the enemy are half as tough, like their riders
+    this.hp -= amount * 0.6 * (this.rider && this.rider.team === 1 ? 2 : 1);
     this.flash = 0.18;
     this.mgr.onHurt?.(this);
     if (this.hp <= 0) { this.mgr.breakMount(this, from, kind); return true; }

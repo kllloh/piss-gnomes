@@ -39,6 +39,7 @@ export class Player implements Rider {
   lastKind: PeeKind = 'normal';
   mount: Mount | null = null;
   armor = 0;
+  speedMul = 1; // class
   /** Testing cheat: nothing can hurt you (press I, or add ?god to the address). */
   god = false;
   /** Seconds since last losing health; after a few quiet seconds health creeps back. */
@@ -164,7 +165,7 @@ export class Player implements Rider {
     let wz = -cos * f - sin * s;
     const len = Math.hypot(wx, wz);
     if (len > 1) { wx /= len; wz /= len; } // (a half-pushed stick walks slower)
-    const run = this.mount ? this.mount.def.speed : RUN;
+    const run = this.mount ? this.mount.def.speed : RUN * this.speedMul;
     const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? run * 0.5 : run) * this.status.speedMul;
     const accel = this.onGround ? 55 : 9;
     const stepX = accel * dt;

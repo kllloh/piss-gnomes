@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { World } from './world';
 import { buildForest, HALF } from './forest';
 import { buildDesert } from './desert';
+import { buildMushroom } from './mushroom';
+import { CLASSES, classOf } from './classes';
+import { initOperator } from './operator';
 import { NavGrid } from './nav';
 import { Player } from './player';
 import { Fighter, type FightCtx } from './fighter';
@@ -82,13 +85,16 @@ scene.add(camera);
 
 // --- game objects ----------------------------------------------------------------------
 const world = new World(HALF);
-const MAP: 'forest' | 'desert' = (() => {
+type MapId = 'forest' | 'desert' | 'mush';
+const MAP_NAMES: Record<MapId, string> = { forest: 'The Enchanted Forest', desert: 'Desert Trip', mush: 'Mushroom Hollow' };
+const MAP: MapId = (() => {
+  const ok = (v: string | null): v is MapId => v === 'forest' || v === 'desert' || v === 'mush';
   const q = new URLSearchParams(location.search).get('map');
-  if (q === 'desert' || q === 'forest') return q;
-  try { if (localStorage.getItem('pg-map') === 'desert') return 'desert'; } catch { /* storage unavailable */ }
+  if (ok(q)) return q;
+  try { const s = localStorage.getItem('pg-map'); if (ok(s)) return s; } catch { /* storage unavailable */ }
   return 'forest';
 })();
-const forest = MAP === 'desert' ? buildDesert(world, scene) : buildForest(world, scene);
+const forest = MAP === 'desert' ? buildDesert(world, scene) : MAP === 'mush' ? buildMushroom(world, scene) : buildForest(world, scene);
 const nav = new NavGrid(world);
 const player = new Player(world, camera);
 const fx = new Effects(scene);
@@ -105,6 +111,11 @@ if (MAP === 'desert') { // hot and bright
   moon.intensity = 2.4;
   fog.near = 45;
   fog.far = 200;
+} else if (MAP === 'mush') { // a glowing violet cavern
+  hemi.intensity = 1.7;
+  moon.intensity = 1.2;
+  fog.near = 18;
+  fog.far = 120;
 }
 
 // giant bugs to ride: a few at each base, a couple around every zone
@@ -200,6 +211,7 @@ const elPrompt = $('prompt');
 const elChatter = $('chatter');
 const elWeapon = $('weaponline');
 const elScope = $('scope');
+const elDeploy = $('deploy');
 const elStreak = $('streakline');
 const elFlash = $('flash');
 const mini = $('minimap') as HTMLCanvasElement;
@@ -340,6 +352,25 @@ let jugs = 0;
 let fireCd = 0;
 let jugCd = 0;
 let zooming = false;
+let classId = 'trooper';
+try { const s = localStorage.getItem('pg-class'); if (s) classId = classOf(s).id; } catch { /* storage unavailable */ }
+
+/** Issue the chosen class kit: health, armour, speed, weapons, mods and a starting potion. */
+function applyPlayerClass() {
+  const c = classOf(classId);
+  player.maxHp = c.hp;
+  player.hp = c.hp;
+  player.armor = c.armor;
+  player.speedMul = c.speed;
+  jugs = c.jugs;
+  ammoSniper = c.sniper;
+  ammoLauncher = c.launcher;
+  player.mods.double = c.double;
+  player.mods.swirl = c.swirl;
+  player.potion = c.potion ? { kind: c.potion, t: POTION_TIME + 20 } : null;
+  weapon = c.sniper ? 'sniper' : c.launcher ? 'launcher' : 'pee';
+}
+
 function resetWeapons() {
   weapon = 'pee';
   ammoSniper = ammoLauncher = jugs = 0;
@@ -397,6 +428,7 @@ function newMatch() {
   let si = 0;
   let ni = 0;
   player.respawn(south[si++], 0);
+  applyPlayerClass();
   for (const f of fighters) f.spawn(f.team === 0 ? south[si++ % south.length] : north[ni++ % north.length], f.team === 0 ? 0 : Math.PI);
   playerWasAlive = true;
   respawnT = 0;
@@ -742,7 +774,7 @@ window.addEventListener('mousemove', (e) => { if (locked) player.look(e.movement
 const GFX = ['ps2', 'hd'] as const;
 const GFX_NAMES = { ps2: 'PLAYSTATION 2', hd: 'HD' };
 function refreshOptions() {
-  for (const el of document.querySelectorAll<HTMLElement>('.opt-card')) {
+  for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card')) {
     el.classList.toggle('selected', el.dataset.g ? el.dataset.g === trip.style : el.dataset.m === MAP);
   }
 }
@@ -752,7 +784,7 @@ function setGfx(g: (typeof GFX)[number], announce = true) {
   refreshOptions();
   if (announce) banner(`GRAPHICS: ${GFX_NAMES[g]}`, 1.2);
 }
-for (const el of document.querySelectorAll<HTMLElement>('.opt-card')) {
+for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card')) {
   el.addEventListener('click', (e) => {
     e.stopPropagation(); // choosing an option should not start the game
     if (el.dataset.g) setGfx(el.dataset.g as (typeof GFX)[number], false);
@@ -770,7 +802,6 @@ for (const el of document.querySelectorAll<HTMLElement>('.opt-card')) {
   const q = new URLSearchParams(location.search).get('gfx');
   if (q === 'ps2' || q === 'hd') g = q;
   setGfx(g, false);
-  $('subtitle').textContent = `${MAP === 'desert' ? 'Desert Trip' : 'The Enchanted Forest'} · 50 v 50 · ride giant bugs · capture the zones`;
 }
 
 function toggleRide() {
@@ -828,14 +859,14 @@ function setRunning(on: boolean) {
   locked = on;
   if (on && firstMatch) { firstMatch = false; setTimeout(() => announcer('start'), 900); }
   elOverlay.style.display = on ? 'none' : 'flex';
-  if (!on) { firing = false; player.moveX = player.moveY = 0; player.jumpHeld = false; sound.pee(false); elMsg.textContent = 'Paused — click to resume'; }
+  if (!on) { firing = false; player.moveX = player.moveY = 0; player.jumpHeld = false; sound.pee(false); elMsg.textContent = 'PAUSED'; elDeploy.textContent = 'RESUME'; }
 }
 function startFallback() {
   if (locked) return;
   fallback = true;
   setRunning(true);
 }
-elOverlay.addEventListener('click', () => {
+function deploy() {
   sound.init();
   music.start();
   sound.ambient(true);
@@ -851,6 +882,10 @@ elOverlay.addEventListener('click', () => {
     startFallback();
   }
   setTimeout(() => { if (!document.pointerLockElement) startFallback(); }, 400);
+}
+elDeploy.addEventListener('click', deploy);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Enter' && !locked && elOverlay.style.display !== 'none') deploy();
 });
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === renderer.domElement) { fallback = false; setRunning(true); }
@@ -871,11 +906,66 @@ function setFaction(f: Faction) {
   buildFighters();
   newMatch();
   refreshCards();
+  renderLobby();
 }
 for (const el of document.querySelectorAll<HTMLElement>('.faction-card')) {
   el.addEventListener('click', () => setFaction(el.dataset.f as Faction));
 }
 refreshCards();
+// --- the lobby screen ---------------------------------------------------------------------------
+const operator = initOperator($('operator') as HTMLCanvasElement, () => elOverlay.style.display !== 'none');
+operator?.setFaction(faction);
+
+function renderLobby() {
+  const c = classOf(classId);
+  operator?.setFaction(faction);
+  operator?.setClass(c);
+  $('op-name').textContent = `${FACTION_INFO[faction].label} · ${c.name.toUpperCase()}`;
+  for (const el of document.querySelectorAll<HTMLElement>('.class-card')) el.classList.toggle('selected', el.dataset.c === classId);
+  const bar = (label: string, v: number, max: number, text: string) => `<div class="stat"><span>${label}</span><div class="bar"><i style="width:${Math.min(100, (v / max) * 100)}%"></i></div><span>${text}</span></div>`;
+  const items = ['Bladder: unlimited pee'];
+  if (c.potion) items.push(`${PEE[c.potion].name}: ${PEE[c.potion].blurb}`);
+  if (c.sniper) items.push(`Piss Sniper x${c.sniper}`);
+  if (c.launcher) items.push(`Piss Launcher x${c.launcher}`);
+  if (c.jugs) items.push(`Piss Jugs x${c.jugs}`);
+  if (c.double) items.push(`Double Stream (${c.double}s)`);
+  if (c.swirl) items.push(`Swirl Stream (${c.swirl}s)`);
+  if (c.armor) items.push(`Armour ${c.armor}`);
+  $('cls-detail').innerHTML =
+    `<div class="cname" style="color:${c.colour}">${c.name}</div><div class="ctag">${c.tag}</div><div class="cdesc">${c.desc}</div>` +
+    bar('HEALTH', c.hp, 130, String(c.hp)) + bar('ARMOUR', c.armor, 60, String(c.armor)) + bar('SPEED', c.speed, 1.25, `${Math.round(c.speed * 100)}%`) +
+    `<ul class="loadout-list">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
+  $('match-info').innerHTML =
+    `<div><span>MAP</span><b>${MAP_NAMES[MAP]}</b></div><div><span>MODE</span><b>CAPTURE THE ZONES</b></div><div><span>PLAYERS</span><b>50 v 50</b></div><div><span>ENEMY HEALTH</span><b>50%</b></div>`;
+}
+
+$('classrow').innerHTML = CLASSES.map((c) => `<div class="class-card" data-c="${c.id}"><span class="badge" style="background:${c.colour}">${c.badge}</span><div><b>${c.name}</b><small>${c.tag}</small></div></div>`).join('');
+for (const el of document.querySelectorAll<HTMLElement>('.class-card')) {
+  el.addEventListener('click', () => {
+    classId = el.dataset.c!;
+    try { localStorage.setItem('pg-class', classId); } catch { /* ignore */ }
+    if (firstMatch) applyPlayerClass(); // not deployed yet: issue it straight away
+    renderLobby();
+  });
+}
+for (const b of document.querySelectorAll<HTMLElement>('#lb-tabs button')) {
+  b.addEventListener('click', () => {
+    for (const o of document.querySelectorAll<HTMLElement>('#lb-tabs button')) o.classList.toggle('on', o === b);
+    for (const pane of document.querySelectorAll<HTMLElement>('.tabpane')) pane.style.display = pane.id === `pane-${b.dataset.tab}` ? 'block' : 'none';
+  });
+}
+{
+  $('lb-name').textContent = `GNOME#${1000 + Math.floor(Math.random() * 9000)}`;
+  const mates = shuffled(NAMES.gnome).slice(0, 3);
+  $('squad').innerHTML = `<div><span>YOU</span><span class="rdy">READY</span></div>` + mates.map((n) => `<div><span>${n.toUpperCase()}</span><span class="${Math.random() < 0.7 ? 'rdy' : 'wait'}">${Math.random() < 0.7 ? 'READY' : 'LOADING'}</span></div>`).join('');
+  const tips = ['MATCHMAKING: 100 / 100 GNOMES IN LOBBY', 'REGION: THE GARDEN  ·  PING 24 MS', 'TIP: RIDE A SPIDER WITH E FOR A FREE PEE CANNON', 'TIP: 8 KILLS IN A ROW UNLOCKS THE PISS NUKE', 'TIP: SWIRL STREAM DOES 2.2x DAMAGE UP CLOSE', 'TIP: ENEMIES HAVE HALF HEALTH, AIM FOR THE HAT'];
+  let ti = 0;
+  const tick = () => { $('lb-ticker').textContent = tips[ti++ % tips.length]; };
+  tick();
+  setInterval(tick, 3200);
+}
+renderLobby();
+
 if (location.search.includes('god')) player.god = true;
 if (location.search.includes('run')) { locked = true; elOverlay.style.display = 'none'; } // lets headless tests run without pointer lock
 addEventListener('resize', () => {
@@ -1233,6 +1323,7 @@ function simulate(dt: number) {
     if (respawnT <= 0) {
       const r = respawnPoint(0);
       player.respawn(r.pos, r.yaw);
+      applyPlayerClass();
       playerWasAlive = true;
       sound.respawn();
     }
@@ -1283,6 +1374,10 @@ function psychedelia(dt: number, vt: number, beat: number) {
     hemi.color.setHSL(0.11 + Math.sin(vt * 0.05) * 0.03, 0.55, 0.9);
     hemi.groundColor.setHSL(0.07 + Math.sin(vt * 0.04) * 0.03, 0.55, 0.62);
     moon.color.setHSL(0.12, 0.8, 0.92);
+  } else if (MAP === 'mush') {
+    hemi.color.setHSL(0.78 + Math.sin(vt * 0.05) * 0.05, 0.6, 0.72);
+    hemi.groundColor.setHSL(0.72, 0.5, 0.32);
+    moon.color.setHSL(0.8, 0.5, 0.8);
   } else {
     hemi.color.setHSL((vt * 0.02) % 1, 0.55, 0.72);
     hemi.groundColor.setHSL((vt * 0.02 + 0.5) % 1, 0.5, 0.26);
@@ -1371,6 +1466,7 @@ tick();
   streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
+  applyPlayerClass, setClass: (id: string) => { classId = id; applyPlayerClass(); renderLobby(); }, get classId() { return classId; },
   setFaction, newMatch, applyHit, respawnPoint, sim: simulate,
   get tickets() { return tickets; },
   get perf() { return { fps: Math.round(fpsEma), quality: lowQuality, simMs: perfSim, droplets: pee.active, drawCalls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },

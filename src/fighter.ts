@@ -5,12 +5,13 @@ import { createFighter, type Faction } from './gnome';
 import type { World } from './world';
 import type { NavGrid } from './nav';
 import type { Effects } from './fx';
-import { PEE, Status, soak, type Combatant, type PeeKind, type PotionState, type SpatialGrid } from './combat';
+import { ENEMY_HP_MUL, PEE, Status, soak, type Combatant, type PeeKind, type PotionState, type SpatialGrid } from './combat';
 import { DROP_SPEED, GRAVITY, type PeeSystem } from './pee';
 import type { Zone, Zones } from './zones';
 import type { Pickup, Potions } from './potions';
 import type { Mount, Mounts, Rider } from './mounts';
 import type { SayCtx } from './talk';
+import { CLASSES, randomClass, type ClassDef } from './classes';
 import { JUG_SPEED, ROCKET_SPEED, type PickupType, type WeaponPickup, type Weapons, type WeaponPickups } from './weapons';
 
 const HW = 0.3;
@@ -142,6 +143,8 @@ export class Fighter implements Rider {
   peeing = false;
   mount: Mount | null = null;
   armor = 0;
+  speedMul = 1;
+  cls: ClassDef = CLASSES[0];
   sinceHurt = 99;
   mods = { double: 0, swirl: 0 };
   hitR2?: number;
@@ -208,8 +211,20 @@ export class Fighter implements Rider {
     this.pos.copy(at);
     this.yaw = yaw;
     this.alive = true;
+    // a random starting kit; enemies have half the health (and armour) so they die 50% easier
+    const cls = randomClass();
+    const ez = this.team === 1 ? ENEMY_HP_MUL : 1;
+    this.cls = cls;
+    this.maxHp = Math.round(cls.hp * ez);
     this.hp = this.maxHp;
-    this.potion = null;
+    this.armor = cls.armor * ez;
+    this.speedMul = cls.speed;
+    this.jugs = cls.jugs;
+    this.ammoSniper = cls.sniper;
+    this.ammoLauncher = cls.launcher;
+    this.mods.double = cls.double;
+    this.mods.swirl = cls.swirl;
+    this.potion = cls.potion ? { kind: cls.potion, t: 60 } : null;
     this.bladder = 100;
     this.status.reset();
     this.target = null;
@@ -267,7 +282,7 @@ export class Fighter implements Rider {
 
   /** Walking speed, or the bug's. */
   private get spd(): number {
-    return this.mount ? this.mount.def.speed : SPEED;
+    return this.mount ? this.mount.def.speed : SPEED * this.speedMul;
   }
 
   private get hw(): number {

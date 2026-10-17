@@ -54,6 +54,15 @@ npm run build      # single self-contained dist/index.html you can double-click
 - **Maps:** pick on the start screen (the page reloads with the new map). **The Enchanted Forest** is the original night
   forest. **Desert Trip** is a hot, bright, hallucinogenic desert: neon cacti, striped mesas, an oasis, giant bones, a
   spinning sun over the Sun Temple, floating mirage orbs and a swirling day sky. Same zones, bugs, weapons and bots.
+- **Mushroom Hollow:** a third map, a glowing violet fungal cavern: towering neon caps you can walk under, glowcaps,
+  puffball cover, a goo lagoon, a giant cap held up by six stems, and spores drifting upwards. Same zones and gear.
+- **Classes and loadouts** (LOADOUT tab on the start screen): Garden Trooper, Sniper Sprinkler, Heavy Hosepipe, Double
+  Dipper, Dew Scout and Field Medic, each with its own health, armour, speed and starting kit. The kit is issued every time
+  you spawn. Bots draw a random class each spawn, too.
+- **Easier enemies:** the other team has half the health and armour (and their bugs half the toughness), so they die 50%
+  faster.
+- **Lobby:** the start screen is now a Call-of-Duty-style lobby: tabs (PLAY / LOADOUT / INTEL), a 3D gnome on a turntable
+  with your class prop, loadout stats, match info, a squad list and a big DEPLOY button (or press Enter).
 - **Graphics options** (start screen, or **H**): **PS2** (below) and plain **HD**.
 - **Art:** blocky PlayStation 2 style: hard-edged low-poly shapes, chunky low-res textures, a 480p picture with dithered 5-bit colour, bloom and interlace lines, on top of the psychedelic sky and warping. Neon 80s UI. **H** switches between PS2 and HD.
 - **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. **T** cycles full / mild / off.

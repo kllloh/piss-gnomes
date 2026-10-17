@@ -24,6 +24,8 @@ export const PEE: Record<PeeKind, PeeDef> = {
 /** Potions you can find (plain pee is just what you have when none is active). */
 export const POTION_KINDS: PeeKind[] = ['fire', 'frost', 'acid', 'shock', 'poison', 'heal'];
 export const POTION_TIME = 40; // seconds a potion lasts
+/** Enemies (the other team) have half the health, so they die 50% easier. */
+export const ENEMY_HP_MUL = 0.5;
 
 export interface PotionState {
   kind: PeeKind;
