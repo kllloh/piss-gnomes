@@ -133,6 +133,21 @@ const pickupSpots: { type: PickupType; pos: THREE.Vector3 }[] = [];
   }
   for (const z of forest.zones) for (let i = 0; i < 2; i++) pickupSpots.push({ type: types[n++ % types.length], pos: freeNear(z.x + (i ? -11 : 11), z.z + (i ? 8 : -8)) });
 }
+{
+  // health kits, armour and the pee mods
+  const extra: PickupType[] = ['health', 'armor', 'double', 'swirl'];
+  let n = 0;
+  for (const z of forest.zones) {
+    pickupSpots.push({ type: 'health', pos: freeNear(z.x + 6, z.z + 12) });
+    pickupSpots.push({ type: 'armor', pos: freeNear(z.x - 7, z.z - 12) });
+    pickupSpots.push({ type: extra[2 + (n++ % 2)], pos: freeNear(z.x - 14, z.z + 3) });
+  }
+  for (const side of [1, -1]) {
+    const b = side === 1 ? forest.baseSouth : forest.baseNorth;
+    pickupSpots.push({ type: 'health', pos: freeNear(b.x - 14, b.z - side * 10) });
+    pickupSpots.push({ type: 'armor', pos: freeNear(b.x + 14, b.z - side * 10) });
+  }
+}
 const pickups = new WeaponPickups(scene, pickupSpots);
 
 // Rory: big, blond, unkillable
@@ -379,7 +394,7 @@ function spreadPoison(from: Combatant) {
 }
 
 /** One droplet landed on `victim`. */
-function applyHit(victim: Combatant, kind: PeeKind, shooter: Combatant, at: THREE.Vector3) {
+function applyHit(victim: Combatant, kind: PeeKind, shooter: Combatant, at: THREE.Vector3, mul = 1) {
   if (victim.isNpc) { victim.hurt(0, kind, shooter); return; } // Rory laughs it off
   const st = victim.status;
   if (kind === 'heal') {
@@ -388,7 +403,7 @@ function applyHit(victim: Combatant, kind: PeeKind, shooter: Combatant, at: THRE
     st.acid = Math.max(0, st.acid - 0.3);
     return;
   }
-  let dmg = PEE[kind].dmg * st.dmgTaken;
+  let dmg = PEE[kind].dmg * st.dmgTaken * mul;
   if (kind === 'shock' && st.wet > 0) dmg *= 2;
   const hadHp = victim.alive;
   victim.hurt(dmg, kind, shooter);
@@ -556,7 +571,10 @@ weapons.onFire = (type, pos) => {
 
 function giveWeapon(type: PickupType) {
   const amount = PICKUP_INFO[type].amount;
-  if (type === 'jug') jugs = Math.min(6, jugs + amount);
+  if (type === 'health') player.heal(amount);
+  else if (type === 'armor') player.armor = Math.min(100, player.armor + amount);
+  else if (type === 'double' || type === 'swirl') player.mods[type] = amount;
+  else if (type === 'jug') jugs = Math.min(6, jugs + amount);
   else if (type === 'sniper') { ammoSniper += amount; weapon = 'sniper'; }
   else { ammoLauncher += amount; weapon = 'launcher'; }
 }
@@ -821,12 +839,13 @@ function renderHud() {
 
   const kind: PeeKind = player.potion?.kind ?? 'normal';
   const col = hex(PEE[kind].color);
-  elPotionName.innerHTML = `<b style="color:${col}">${PEE[kind].name}</b>`;
+  const modText = (player.mods.double > 0 ? ` <span style="color:#ffa030">×2 STREAM ${Math.ceil(player.mods.double)}s</span>` : '') + (player.mods.swirl > 0 ? ` <span style="color:#b050ff">SWIRL ${Math.ceil(player.mods.swirl)}s</span>` : '');
+  elPotionName.innerHTML = `<b style="color:${col}">${PEE[kind].name}</b>${modText}`;
   elPotionFill.style.width = player.potion ? `${(player.potion.t / POTION_TIME) * 100}%` : '0%';
   elPotionFill.style.background = col;
   elBladder.style.width = `${player.bladder}%`;
   elBladder.style.background = col;
-  elHp.textContent = `♥ ${Math.ceil(player.hp)}${player.status.burn > 0 ? ' 🔥' : ''}${player.status.chill > 0.2 ? ' ❄' : ''}${player.status.poison > 0 ? ' ☠' : ''}`;
+  elHp.textContent = `♥ ${Math.ceil(player.hp)}${player.armor > 0 ? `  ⛨ ${Math.ceil(player.armor)}` : ''}${player.status.burn > 0 ? ' 🔥' : ''}${player.status.chill > 0.2 ? ' ❄' : ''}${player.status.poison > 0 ? ' ☠' : ''}`;
   elStats.textContent = `Drenched ${kills} · Defeated ${deaths}`;
   const wname = weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? `Piss Sniper ×${ammoSniper}` : `Piss Launcher ×${ammoLauncher}`;
   elWeapon.textContent = `[${wname}]${jugs ? `  Jugs ×${jugs} (G)` : ''}${ammoSniper && weapon !== 'sniper' ? '  2: sniper' : ''}${ammoLauncher && weapon !== 'launcher' ? '  3: launcher' : ''}`;
@@ -1048,11 +1067,14 @@ function simulate(dt: number) {
     if (who.isPlayer) {
       giveWeapon(p.type);
       banner(`${info.name.toUpperCase()}! ${info.blurb}`, 2.8);
-      sound.potion();
-      if (Math.random() < 0.6) playerSay('weapon');
+      if (p.type === 'health') sound.healthUp();
+      else if (p.type === 'armor') sound.armorUp();
+      else if (p.type === 'double' || p.type === 'swirl') sound.powerUp();
+      else sound.potion();
+      if (Math.random() < 0.6) playerSay(p.type === 'health' || p.type === 'armor' ? 'health' : 'weapon');
     } else if (who instanceof Fighter) {
       who.give(p.type, info.amount);
-      fighterSay(who, 'weapon');
+      fighterSay(who, p.type === 'health' || p.type === 'armor' ? 'health' : 'weapon');
     }
   });
   mounts.update(dt, time);

@@ -46,6 +46,10 @@ export interface Combatant {
   /** Wider/taller hit box while riding a bug (squared radius, height). */
   /** Scenery with a pulse (Rory): hit by everyone's pee, hurt by nobody's, ignored by the bots. */
   isNpc?: boolean;
+  /** Armour soaks most damage until it runs out. */
+  armor?: number;
+  /** Seconds left on each pee mod: double stream and swirl. */
+  mods?: { double: number; swirl: number };
   hitR2?: number;
   hitH?: number;
   /** Direct hit: reacts and may alert. */
@@ -168,4 +172,13 @@ export class SpatialGrid {
       }
     }
   }
+}
+
+/** Armour takes two thirds of each hit until it is used up. Returns the damage that gets through. */
+export function soak(c: { armor?: number }, amount: number): number {
+  const a = c.armor ?? 0;
+  if (a <= 0) return amount;
+  const take = Math.min(a, amount * 0.67);
+  c.armor = a - take;
+  return amount - take;
 }

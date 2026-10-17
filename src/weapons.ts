@@ -4,7 +4,7 @@ import { PEE, type Combatant, type PeeKind, type SpatialGrid } from './combat';
 import type { World } from './world';
 
 export type WeaponType = 'sniper' | 'launcher';
-export type PickupType = 'jug' | WeaponType;
+export type PickupType = 'jug' | WeaponType | 'health' | 'armor' | 'double' | 'swirl';
 
 export const PROJ_GRAVITY = 9;
 export const JUG_SPEED = 15;
@@ -90,6 +90,58 @@ function makeLauncher(): THREE.Group {
 }
 
 /** Thrown jugs, launched pee-balls and sniper beams. The game decides what an explosion does. */
+function at(m: THREE.Mesh, x: number, y: number, z: number): THREE.Mesh {
+  m.position.set(x, y, z);
+  return m;
+}
+
+function makeHealth(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new SoftBox(0.56, 0.42, 0.28), lit({ color: 0xf7f4ec })));
+  const red = new THREE.MeshBasicMaterial({ color: 0xe0203a });
+  for (const z of [-0.15, 0.15]) {
+    g.add(at(new THREE.Mesh(new SoftBox(0.3, 0.09, 0.02), red), 0, 0, z));
+    g.add(at(new THREE.Mesh(new SoftBox(0.09, 0.3, 0.02), red), 0, 0, z));
+  }
+  g.add(at(new THREE.Mesh(new SoftBox(0.2, 0.06, 0.06), lit({ color: 0x6a4a2a })), 0, 0.24, 0));
+  return g;
+}
+
+function makeArmor(): THREE.Group {
+  const g = new THREE.Group();
+  const steel = lit({ color: 0x8fa4c0 });
+  const gold = lit({ color: 0xe8b830 });
+  g.add(new THREE.Mesh(new SoftBox(0.5, 0.62, 0.12), steel));
+  g.add(at(new THREE.Mesh(new SoftBox(0.56, 0.08, 0.14), gold), 0, 0.3, 0));
+  g.add(at(new THREE.Mesh(new SoftBox(0.08, 0.6, 0.14), gold), 0, 0, 0));
+  g.add(at(new THREE.Mesh(new SoftBox(0.18, 0.18, 0.08), gold), 0, 0.02, -0.08));
+  g.scale.setScalar(1.15);
+  return g;
+}
+
+function makeDouble(): THREE.Group {
+  const g = new THREE.Group();
+  for (const x of [-0.3, 0.3]) {
+    const j = makeJug(0xffa030);
+    j.position.x = x;
+    j.scale.setScalar(0.85);
+    g.add(j);
+  }
+  return g;
+}
+
+function makeSwirl(): THREE.Group {
+  const g = new THREE.Group();
+  for (let i = 0; i < 9; i++) {
+    const a = i * 0.9;
+    const m = new THREE.Mesh(new SoftBox(0.15, 0.11, 0.15), new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL((i * 0.09 + 0.75) % 1, 0.9, 0.6) }));
+    m.position.set(Math.cos(a) * 0.24, -0.34 + i * 0.09, Math.sin(a) * 0.24);
+    g.add(m);
+  }
+  g.add(at(new THREE.Mesh(new SoftBox(0.14, 0.7, 0.14), lit({ color: 0xf2c31a })), 0, 0, 0));
+  return g;
+}
+
 export class Weapons {
   private projs: Proj[] = [];
   private beams: Beam[] = [];
@@ -238,7 +290,11 @@ export interface WeaponPickup {
   halo: THREE.Mesh;
 }
 
-export const PICKUP_INFO: Record<PickupType, { name: string; blurb: string; amount: number; color: number }> = {
+export const PICKUP_INFO: Record<PickupType, { name: string; blurb: string; amount: number; color: number; respawn?: number }> = {
+  health: { name: 'Health Kit', blurb: 'Patched right up.', amount: 60, color: 0xff4060, respawn: 30 },
+  armor: { name: 'Armour', blurb: 'Soaks most of the next hits.', amount: 50, color: 0x60a0ff, respawn: 40 },
+  double: { name: 'Double Stream', blurb: 'Two streams. Twice the damage, for 35 seconds.', amount: 35, color: 0xffa030 },
+  swirl: { name: 'Swirl Stream', blurb: 'A corkscrew stream that hits much harder, for 35 seconds.', amount: 35, color: 0xb050ff },
   jug: { name: 'Piss Jugs', blurb: 'Grenades! Press G to lob one.', amount: 3, color: 0xf2d83a },
   sniper: { name: 'Piss Sniper', blurb: 'Press 2. Right-click to zoom. One shot, one soaking.', amount: 8, color: 0x19e3ff },
   launcher: { name: 'Piss Launcher', blurb: 'Press 3. Big, slow, splashy.', amount: 5, color: 0xff2bd6 },
@@ -252,7 +308,14 @@ export class WeaponPickups {
   constructor(scene: THREE.Scene, spots: { type: PickupType; pos: THREE.Vector3 }[]) {
     for (const s of spots) {
       const group = new THREE.Group();
-      const model = s.type === 'jug' ? makeJug(0xffffff) : s.type === 'sniper' ? makeSniper() : makeLauncher();
+      const model =
+        s.type === 'jug' ? makeJug(0xffffff)
+        : s.type === 'sniper' ? makeSniper()
+        : s.type === 'launcher' ? makeLauncher()
+        : s.type === 'health' ? makeHealth()
+        : s.type === 'armor' ? makeArmor()
+        : s.type === 'double' ? makeDouble()
+        : makeSwirl();
       if (s.type === 'jug') model.scale.setScalar(1.5);
       const halo = new THREE.Mesh(new SoftBox(1, 1, 1, 0.45), new THREE.MeshBasicMaterial({ color: PICKUP_INFO[s.type].color, transparent: true, opacity: 0.22, depthWrite: false }));
       halo.position.y = 0.1;
@@ -291,9 +354,11 @@ export class WeaponPickups {
       grid.query(p.pos.x, p.pos.z, 1.8, pnear);
       for (const who of pnear) {
         if (!who.alive || who.isNpc) continue;
+        if (p.type === 'health' && who.hp >= who.maxHp) continue; // leave it for someone who needs it
+        if (p.type === 'armor' && (who.armor ?? 0) >= 100) continue;
         p.active = false;
         p.group.visible = false;
-        p.respawnT = 45;
+        p.respawnT = PICKUP_INFO[p.type].respawn ?? 45;
         onTake(p, who);
         break;
       }

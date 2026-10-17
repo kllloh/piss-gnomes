@@ -3,7 +3,7 @@ import type { Faction } from './gnome';
 
 export type SayCtx =
   | 'spot' | 'hit' | 'kill' | 'death' | 'idle' | 'capture' | 'lost' | 'cheer' | 'shout' | 'mount' | 'bugpop' | 'lowhp' | 'burn'
-  | 'fire' | 'frost' | 'acid' | 'shock' | 'poison' | 'heal' | 'weapon';
+  | 'fire' | 'frost' | 'acid' | 'shock' | 'poison' | 'heal' | 'weapon' | 'health';
 
 /** Lines that depend on which side you are on. Red hats are posh; blue caps are gruff. */
 const SIDE: Record<Faction, Partial<Record<SayCtx, string[]>>> = {
@@ -33,6 +33,7 @@ const COMMON: Partial<Record<SayCtx, string[]>> = {
   bugpop: ['{bug}! No! Not {bug}!', 'Noooo! My beautiful {bug}!', 'Oh {bug}, you were too pure!', 'I loved that bug!', 'Goo! Everywhere! So much goo!'],
   lowhp: ['I am bleeding! No wait, that is wee.', 'Help! I am only mostly dry!', 'Medic! Or a towel!', 'I do not feel so good!', 'Somebody hold my beard!'],
   burn: ['I am on fire! This is fine! It is not fine!', 'Hot hot hot hot hot!', 'My beard! My beautiful beard!', 'Why am I warm?! WHY?!', 'Fire! Fire! Nobody pee on me! Actually yes! Pee on me!'],
+  health: ['Ahh, much better!', 'Patched up! Mostly!', 'Armour on! Feeling invincible!', 'Health! Glorious health!', 'I feel brand new. Slightly soggy.', 'Is it a medkit or is it a snack? Eating it anyway.'],
   weapon: ['A piss weapon! Christmas has come early!', 'Ooh, something to throw! Or fire! Or both!', 'Heavy artillery! Of urine!', 'Finally, a proper bladder cannon!', 'This is not safe. I love it.', 'I have been waiting my whole life for this jug.'],
   fire: ['Dragon brew! My bladder is a flamethrower!', 'Ooh, spicy!', 'I am the hot sauce!'],
   frost: ['Frost elixir! I am a snow cone!', 'Brrr! It is cold coming out!', 'Ice ice baby!'],
@@ -88,5 +89,5 @@ export function announce(ctx: AnnounceCtx): string {
 /** How often each situation actually produces a line (so the forest is chatty but not unbearable). */
 export const SAY_CHANCE: Record<SayCtx, number> = {
   spot: 0.3, hit: 0.07, kill: 0.5, death: 0.35, idle: 1, capture: 0.8, lost: 0.5, cheer: 0.25, shout: 1, mount: 0.9, bugpop: 0.9,
-  lowhp: 0.35, burn: 0.3, weapon: 0.9, fire: 0.9, frost: 0.9, acid: 0.9, shock: 0.9, poison: 0.9, heal: 0.9,
+  lowhp: 0.35, burn: 0.3, weapon: 0.9, health: 0.6, fire: 0.9, frost: 0.9, acid: 0.9, shock: 0.9, poison: 0.9, heal: 0.9,
 };

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { World } from './world';
 import type { Combatant } from './combat';
-import { Status, type PeeKind, type PotionState } from './combat';
+import { Status, soak, type PeeKind, type PotionState } from './combat';
 import type { Mount, Rider } from './mounts';
 
 export const PLAYER_HW = 0.3;
@@ -36,6 +36,8 @@ export class Player implements Rider {
   lastFrom: Combatant | null = null;
   lastKind: PeeKind = 'normal';
   mount: Mount | null = null;
+  armor = 0;
+  mods = { double: 0, swirl: 0 };
   hitR2?: number;
   hitH?: number;
   gravityMul = 1; // chaos events
@@ -80,7 +82,7 @@ export class Player implements Rider {
       this.mount.damage(amount, kind, from);
       return;
     }
-    this.hp -= amount;
+    this.hp -= soak(this, amount);
     this.lastKind = kind;
     this.hurtFlash = Math.min(1, this.hurtFlash + 0.25);
     this.lastFrom = from;
@@ -90,7 +92,7 @@ export class Player implements Rider {
   dot(amount: number, kind: PeeKind, from: Combatant | null) {
     if (!this.alive || this.protect > 0) return;
     if (this.mount) { this.mount.damage(amount, kind, from); return; }
-    this.hp -= amount;
+    this.hp -= soak(this, amount);
     this.lastKind = kind;
     this.hurtFlash = Math.max(this.hurtFlash, 0.12);
     this.lastFrom = from;
@@ -115,6 +117,8 @@ export class Player implements Rider {
     this.alive = true;
     this.status.reset();
     this.potion = null;
+    this.armor = 0;
+    this.mods.double = this.mods.swirl = 0;
     this.bladder = 100;
     this.protect = 2.5;
     this.mount = null;
@@ -127,6 +131,8 @@ export class Player implements Rider {
 
   update(dt: number) {
     this.protect = Math.max(0, this.protect - dt);
+    this.mods.double = Math.max(0, this.mods.double - dt);
+    this.mods.swirl = Math.max(0, this.mods.swirl - dt);
     if (this.alive) this.move(dt);
     else this.deathT += dt;
     this.shake = Math.max(0, this.shake - dt * 2);

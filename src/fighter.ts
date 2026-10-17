@@ -5,7 +5,7 @@ import { createFighter, type Faction } from './gnome';
 import type { World } from './world';
 import type { NavGrid } from './nav';
 import type { Effects } from './fx';
-import { PEE, Status, type Combatant, type PeeKind, type PotionState, type SpatialGrid } from './combat';
+import { PEE, Status, soak, type Combatant, type PeeKind, type PotionState, type SpatialGrid } from './combat';
 import { DROP_SPEED, GRAVITY, type PeeSystem } from './pee';
 import type { Zone, Zones } from './zones';
 import type { Pickup, Potions } from './potions';
@@ -141,6 +141,8 @@ export class Fighter implements Rider {
   yaw = 0;
   peeing = false;
   mount: Mount | null = null;
+  armor = 0;
+  mods = { double: 0, swirl: 0 };
   hitR2?: number;
   hitH?: number;
   speedNow = 0;
@@ -199,6 +201,8 @@ export class Fighter implements Rider {
     this.mountGoal = null;
     this.weaponGoal = null;
     this.ammoSniper = this.ammoLauncher = this.jugs = 0;
+    this.armor = 0;
+    this.mods.double = this.mods.swirl = 0;
     this.pos.copy(at);
     this.yaw = yaw;
     this.alive = true;
@@ -228,7 +232,10 @@ export class Fighter implements Rider {
   give(type: PickupType, amount: number) {
     if (type === 'jug') this.jugs = Math.min(6, this.jugs + amount);
     else if (type === 'sniper') this.ammoSniper += amount;
-    else this.ammoLauncher += amount;
+    else if (type === 'launcher') this.ammoLauncher += amount;
+    else if (type === 'health') this.heal(amount);
+    else if (type === 'armor') this.armor = Math.min(100, this.armor + amount);
+    else this.mods[type] = amount;
   }
 
   heal(n: number) {
@@ -242,7 +249,7 @@ export class Fighter implements Rider {
       if (from && !this.target && from.alive && from.team !== this.team) this.target = from;
       return;
     }
-    this.hp -= amount;
+    this.hp -= soak(this, amount);
     if (this.hp <= 0) { this.die(kind, from); return; }
     Fighter.onHurt?.(this);
     Fighter.onSay?.(this, kind === 'fire' ? 'burn' : this.hp < 25 ? 'lowhp' : 'hit');
@@ -267,7 +274,7 @@ export class Fighter implements Rider {
   dot(amount: number, kind: PeeKind, from: Combatant | null) {
     if (!this.alive || this.protect > 0) return;
     if (this.mount) { this.mount.damage(amount, kind, from); return; }
-    this.hp -= amount;
+    this.hp -= soak(this, amount);
     if (this.hp <= 0) this.die(kind, from);
   }
 
@@ -326,6 +333,8 @@ export class Fighter implements Rider {
       this.potion.t -= dt;
       if (this.potion.t <= 0) this.potion = null;
     }
+    this.mods.double = Math.max(0, this.mods.double - dt);
+    this.mods.swirl = Math.max(0, this.mods.swirl - dt);
     this.bladder = Math.min(100, this.bladder + (this.peeing ? 0 : 9) * dt);
     this.speedNow = 0;
     if (this.status.frozen > 0) { // frozen solid
@@ -526,7 +535,13 @@ export class Fighter implements Rider {
       let bd = 32;
       for (const p of c.pickups.list) {
         if (!p.active) continue;
-        const wanted = p.type === 'jug' ? this.jugs < 3 : p.type === 'sniper' ? this.ammoSniper <= 0 : this.ammoLauncher <= 0;
+        const wanted =
+          p.type === 'jug' ? this.jugs < 3
+          : p.type === 'sniper' ? this.ammoSniper <= 0
+          : p.type === 'launcher' ? this.ammoLauncher <= 0
+          : p.type === 'health' ? this.hp < 70
+          : p.type === 'armor' ? this.armor < 40
+          : this.mods[p.type] < 5;
         const dd = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
         if (wanted && dd < bd) { bd = dd; best = p; }
       }

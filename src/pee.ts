@@ -16,7 +16,7 @@ export interface PeeContext {
   grid: SpatialGrid;
   fx: Effects;
   /** A droplet landed on somebody. */
-  onHit: (victim: Combatant, kind: PeeKind, shooter: Combatant, at: THREE.Vector3) => void;
+  onHit: (victim: Combatant, kind: PeeKind, shooter: Combatant, at: THREE.Vector3, mul: number) => void;
 }
 
 const tmpP = new THREE.Vector3();
@@ -34,6 +34,8 @@ export class PeeSystem {
   private vz = new Float32Array(MAX);
   private life = new Float32Array(MAX);
   private kind = new Uint8Array(MAX);
+  private mul = new Float32Array(MAX);
+  private clock = 0;
   private shooter: (Combatant | null)[] = new Array(MAX).fill(null);
   private count = 0;
   private acc = new Map<number, number>();
@@ -60,10 +62,22 @@ export class PeeSystem {
 
   /** Emit this frame's share of a continuous stream. */
   emit(shooter: Combatant, origin: THREE.Vector3, dir: THREE.Vector3, kind: PeeKind, dt: number, spread = 0.03, rate = 1) {
-    const a = (this.acc.get(shooter.id) ?? 0) + dt * RATE * rate * this.rateMul;
+    const mods = shooter.mods;
+    const dbl = !!mods && mods.double > 0;
+    const swirl = !!mods && mods.swirl > 0;
+    const a = (this.acc.get(shooter.id) ?? 0) + dt * RATE * rate * this.rateMul * (dbl ? 2 : 1);
     const n = Math.floor(a);
     this.acc.set(shooter.id, a - n);
     const ki = KINDS.indexOf(kind);
+    // sideways and 'up' axes of the stream, for the double stream and the corkscrew
+    let rx = dir.z;
+    let rz = -dir.x;
+    const rl = Math.hypot(rx, rz) || 1;
+    rx /= rl;
+    rz /= rl;
+    const ux = -rz * dir.y; // up axis = dir x right
+    const uy = dir.z * rx - dir.x * rz;
+    const uz = rx * dir.y;
     for (let k = 0; k < n && this.count < MAX; k++) {
       const i = this.count++;
       const sp = DROP_SPEED * (0.96 + Math.random() * 0.08);
@@ -71,9 +85,21 @@ export class PeeSystem {
       this.vx[i] = dir.x * sp + (Math.random() - 0.5) * spread * DROP_SPEED;
       this.vy[i] = dir.y * sp + (Math.random() - 0.5) * spread * DROP_SPEED;
       this.vz[i] = dir.z * sp + (Math.random() - 0.5) * spread * DROP_SPEED;
-      this.px[i] = origin.x + this.vx[i] * back;
+      this.mul[i] = 1;
+      let side = 0;
+      if (dbl) side = k % 2 ? 0.17 : -0.17;
+      if (swirl) {
+        const ph = (this.clock - back) * 22 + (dbl && k % 2 ? Math.PI : 0);
+        const c = Math.cos(ph) * 0.8;
+        const s = Math.sin(ph) * 0.8;
+        this.vx[i] += rx * c + ux * s;
+        this.vy[i] += uy * s;
+        this.vz[i] += rz * c + uz * s;
+        this.mul[i] = 2.2; // the corkscrew hits much harder
+      }
+      this.px[i] = origin.x + rx * side + this.vx[i] * back;
       this.py[i] = origin.y + this.vy[i] * back;
-      this.pz[i] = origin.z + this.vz[i] * back;
+      this.pz[i] = origin.z + rz * side + this.vz[i] * back;
       this.life[i] = LIFE;
       this.kind[i] = ki;
       this.shooter[i] = shooter;
@@ -88,6 +114,7 @@ export class PeeSystem {
       this.vx[i] = this.vx[last]; this.vy[i] = this.vy[last]; this.vz[i] = this.vz[last];
       this.life[i] = this.life[last];
       this.kind[i] = this.kind[last];
+      this.mul[i] = this.mul[last];
       this.shooter[i] = this.shooter[last];
       this.mesh.setColorAt(i, COLORS[this.kind[i]]);
     }
@@ -95,6 +122,7 @@ export class PeeSystem {
   }
 
   update(dt: number, c: PeeContext) {
+    this.clock += dt;
     for (let i = this.count - 1; i >= 0; i--) {
       this.life[i] -= dt;
       if (this.life[i] <= 0) { this.remove(i); continue; }
@@ -126,7 +154,7 @@ export class PeeSystem {
         if (dx * dx + dz * dz < (t.hitR2 ?? 0.3) && y > t.pos.y && y < t.pos.y + (t.hitH ?? 1.6)) { hit = t; break; }
       }
       if (hit) {
-        c.onHit(hit, kind, shooter, tmpP.set(x, y, z));
+        c.onHit(hit, kind, shooter, tmpP.set(x, y, z), this.mul[i]);
         this.remove(i);
       }
     }

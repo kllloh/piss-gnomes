@@ -633,6 +633,21 @@ export class Sound {
     this.burst(0.1, 5000, 0.4);
   }
 
+  healthUp() {
+    [523, 659, 784].forEach((f, i) => this.tone(0.14, f, f, 0.16, 'sine', 0, i * 0.08));
+    this.tone(0.08, 1568, 1568, 0.3, 'triangle', 0, 0.26);
+  }
+
+  armorUp() {
+    this.burst(0.3, 3500, 0.1);
+    this.tone(0.2, 900, 500, 0.18, 'square');
+    this.tone(0.15, 1350, 700, 0.2, 'triangle', 0, 0.04);
+  }
+
+  powerUp() {
+    [392, 523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(0.1, f, f * 1.01, 0.1, 'sawtooth', 0, i * 0.05));
+  }
+
   ignite() {
     this.burst(0.35, 3200, 0.35);
     this.tone(0.1, 120, 300, 0.3, 'sawtooth');
