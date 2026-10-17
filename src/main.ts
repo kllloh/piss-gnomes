@@ -179,6 +179,17 @@ const pickups = new WeaponPickups(scene, pickupSpots);
 
 // kill-streak rewards: turret, air strike, nuke
 const markers = new Markers(scene);
+// sounds behind walls are muffled
+const occFrom = new THREE.Vector3();
+const occDir = new THREE.Vector3();
+sound.occlude = (x, z, y) => {
+  occFrom.copy(camera.position);
+  occDir.set(x - occFrom.x, y - occFrom.y, z - occFrom.z);
+  const d = occDir.length();
+  if (d < 3) return false;
+  occDir.divideScalar(d);
+  return world.raycast(occFrom, occDir, d) < d - 0.5;
+};
 const streaks = new Streaks(scene, world, grid, pee, fx, weapons, () => everyone);
 
 // Rory: big, blond, unkillable
@@ -1116,7 +1127,7 @@ function renderHud() {
   }
   miniCtx.fillStyle = '#ffd070';
   miniCtx.beginPath();
-  miniCtx.arc(mx(rory.pos.x), mz(rory.pos.z), 4, 0, Math.PI * 2);
+  miniCtx.arc(mx(rory.pos.x), mz(rory.pos.z), 6, 0, Math.PI * 2);
   miniCtx.fill();
   for (const m of mounts.list) {
     if (!m.alive || m.rider) continue;
@@ -1445,7 +1456,7 @@ function tick() {
     music.setMood(KIND_IDX.indexOf(player.potion?.kind ?? 'normal'));
   }
 
-  sound.setListener(camera.position.x, camera.position.z, camera.rotation.y);
+  sound.setListener(camera.position.x, camera.position.z, camera.rotation.y, camera.position.y);
   markers.update(everyone, camera.position, vt, (c) => (c instanceof Fighter && c.mount ? c.mount.def.lift : 0) + (Fighter.size - 1) * 1.4, trip.ink > 0 ? 1 : renderer.domElement.height / 480);
   trip.render(scene, camera, vt, ampNow * (thermalOn ? 0.2 : MAP === 'desert' ? 0.7 : 1), beat, tintNow);
 }

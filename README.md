@@ -47,6 +47,7 @@ npm run build      # single self-contained dist/index.html you can double-click
 - **Bugs:** Disco Spider (fast, twin cannons), Tank Beetle (slow, tough, shotgun-style cannons), Zoom Ladybug (very
   fast, fragile). Press **E** next to one to ride it; while you ride, the bug takes the damage. Bots ride them too, and
   popped bugs come back after 40 seconds.
+- **3D sound:** every sound in the world is placed in 3D with HRTF panning, so you can hear left and right, in front and behind, and above and below. Distant sounds fade, and sounds behind walls come out muffled. Wear headphones.
 - **Sound:** footsteps (boots, skittering legs, beetle thumps), jumps, splashing, a night-forest ambience and a
   generative music engine that plays weird scales in odd time signatures. The scale changes with your potion.
 - **Rory:** a huge, blond, bowl-cut NPC (twice a gnome's size) who wanders the forest and cannot be killed. Get close and he says "Me Rory".

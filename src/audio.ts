@@ -27,17 +27,42 @@ export class Sound {
   }
 
   /** Tell the mixer where the listener is, so sounds can be panned and attenuated. */
-  setListener(x: number, z: number, yaw: number) {
+  setListener(x: number, z: number, yaw: number, y = 1.6) {
     this.lx = x;
     this.lz = z;
     this.lyaw = yaw;
+    const l = this.ctx?.listener;
+    if (!l) return;
+    // ears at the camera, facing where it faces: this is what makes the HRTF panning (left/right, front/back, above/below) work
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    if (l.positionX) {
+      l.positionX.value = x;
+      l.positionY.value = y;
+      l.positionZ.value = z;
+      l.forwardX.value = fx;
+      l.forwardY.value = 0;
+      l.forwardZ.value = fz;
+      l.upX.value = 0;
+      l.upY.value = 1;
+      l.upZ.value = 0;
+    } else {
+      l.setPosition(x, y, z);
+      l.setOrientation(fx, 0, fz, 0, 1, 0);
+    }
   }
 
+  /** Set by the game: is there a wall between the listener and this point? Sounds behind walls come out muffled. */
+  occlude: ((x: number, z: number, y: number) => boolean) | null = null;
+  private src: { x: number; y: number; z: number; t: number; muffled: boolean } | null = null;
+
   /** Volume (0..1) and stereo pan (-1..1) for a sound at world position (x, z). */
-  spatial(x: number, z: number): { vol: number; pan: number } {
+  spatial(x: number, z: number, y = 1.0): { vol: number; pan: number } {
     const dx = x - this.lx;
     const dz = z - this.lz;
     const dist = Math.hypot(dx, dz);
+    // remember where this sound is: the next sound(s) played in this same instant come from here, in 3D
+    this.src = { x, y, z, t: performance.now(), muffled: dist > 4 && !!this.occlude?.(x, z, y) };
     const vol = Math.max(0, Math.min(1, 1 - dist / 55));
     // listener's right vector for yaw: (cos, -sin)
     const pan = dist < 0.5 ? 0 : Math.max(-1, Math.min(1, (dx * Math.cos(this.lyaw) - dz * Math.sin(this.lyaw)) / dist));
@@ -49,6 +74,31 @@ export class Sound {
     if (!this.ctx) return null;
     const g = this.ctx.createGain();
     g.gain.value = vol;
+    const s = this.src;
+    if (s && pan !== 0 && vol > 0.1 && performance.now() - s.t < 30 && typeof this.ctx.createPanner === 'function') {
+      // a real 3D source: HRTF panner at the sound's position (distance fade is already in `vol`)
+      const p = this.ctx.createPanner();
+      p.panningModel = 'HRTF';
+      p.distanceModel = 'linear';
+      p.rolloffFactor = 0;
+      if (p.positionX) {
+        p.positionX.value = s.x;
+        p.positionY.value = s.y;
+        p.positionZ.value = s.z;
+      } else {
+        p.setPosition(s.x, s.y, s.z);
+      }
+      if (s.muffled) {
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 700;
+        g.gain.value = vol * 0.7;
+        g.connect(lp).connect(p).connect(this.ctx.destination);
+      } else {
+        g.connect(p).connect(this.ctx.destination);
+      }
+      return { input: g, gain: g };
+    }
     if (pan !== 0 && typeof this.ctx.createStereoPanner === 'function') {
       const p = this.ctx.createStereoPanner();
       p.pan.value = pan;

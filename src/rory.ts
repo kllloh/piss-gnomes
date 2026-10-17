@@ -5,12 +5,12 @@ import type { World } from './world';
 import type { NavGrid } from './nav';
 import type { Player } from './player';
 
-const SCALE_XZ = 1.05; // thin
-const SCALE_Y = 2.1; // and very tall
-const HW = 0.45;
-const H = 3.1;
+const SCALE_XZ = 2.1; // twice the size he was: still tall and thin (4.2 tall against 2.1 wide)
+const SCALE_Y = 4.2;
+const HW = 0.9;
+const H = 6.2;
 const SPEED = 2.4;
-const GREET_DIST = 10;
+const GREET_DIST = 14;
 
 /** Rory. Big, blond, bowl-cut, friendly and completely unkillable. */
 export class Rory implements Combatant {
@@ -22,7 +22,7 @@ export class Rory implements Combatant {
   readonly status = new Status();
   readonly pos = new THREE.Vector3();
   readonly group = new THREE.Group();
-  readonly hitR2 = 0.8;
+  readonly hitR2 = 3.2;
   readonly hitH = H;
   alive = true;
   hp = 9999;
