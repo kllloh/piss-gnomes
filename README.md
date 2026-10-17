@@ -37,6 +37,11 @@ npm run build      # single self-contained dist/index.html you can double-click
   it is gone. Both are left alone if you do not need them. **Double Stream** (35 s) fires two streams at twice the flow, and
   **Swirl Stream** (35 s) fires a corkscrew whose droplets do 2.2x damage; they stack, and they work with potions and bug
   cannons. Bots hunt for all of these too.
+- **Kill streaks** (kills in a row without dying; rewards are lost if you die, press **R** to use the next one):
+  3 kills = **Piss Turret** (a friendly auto-turret that sprays nearby enemies for 40 s and counts its kills for you),
+  5 kills = **Piss Air Strike** (a smoke pillar where you aim, then nine giant jugs fall in a line), 8 kills =
+  **Piss Nuke** (a 4 second siren, then a golden fireball that wipes out every enemy within 90 m of where you aimed;
+  your side is safe). Bots shoot at your turret, so protect it.
 - **Bugs:** Disco Spider (fast, twin cannons), Tank Beetle (slow, tough, shotgun-style cannons), Zoom Ladybug (very
   fast, fragile). Press **E** next to one to ride it; while you ride, the bug takes the damage. Bots ride them too, and
   popped bugs come back after 40 seconds.

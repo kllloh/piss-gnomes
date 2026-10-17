@@ -648,6 +648,76 @@ export class Sound {
     [392, 523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(0.1, f, f * 1.01, 0.1, 'sawtooth', 0, i * 0.05));
   }
 
+  private sirenTimer: number | undefined;
+
+  /** A rising and falling air-raid siren. */
+  siren(seconds = 3) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    for (let i = 0; i * 1.0 < seconds; i++) {
+      o.frequency.setValueAtTime(420, t + i);
+      o.frequency.linearRampToValueAtTime(900, t + i + 0.5);
+      o.frequency.linearRampToValueAtTime(420, t + i + 1);
+    }
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 1800;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.12, t + 0.2);
+    g.gain.setValueAtTime(0.12, t + seconds - 0.3);
+    g.gain.linearRampToValueAtTime(0.0001, t + seconds);
+    o.connect(f).connect(g).connect(this.ctx.destination);
+    o.start(t);
+    o.stop(t + seconds + 0.05);
+  }
+
+  /** A jet going over very low. */
+  flyby() {
+    if (!this.ctx || !this.noise) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(250, t);
+    bp.frequency.exponentialRampToValueAtTime(1400, t + 1.1);
+    bp.frequency.exponentialRampToValueAtTime(220, t + 2.6);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 1.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+    src.connect(bp).connect(g).connect(this.ctx.destination);
+    src.start(t);
+    src.stop(t + 2.7);
+  }
+
+  /** The big one. */
+  nukeBoom() {
+    if (!this.ctx || !this.noise) return;
+    const t = this.ctx.currentTime;
+    this.burst(1.0, 2400, 2.4);
+    this.tone(0.9, 80, 18, 3.2, 'sine');
+    this.tone(0.5, 40, 14, 4, 'sawtooth');
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t);
+    lp.frequency.exponentialRampToValueAtTime(60, t + 4);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.7, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 4);
+    src.connect(lp).connect(g).connect(this.ctx.destination);
+    src.start(t);
+    src.stop(t + 4.1);
+  }
+
   ignite() {
     this.burst(0.35, 3200, 0.35);
     this.tone(0.1, 120, 300, 0.3, 'sawtooth');

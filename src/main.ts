@@ -15,6 +15,7 @@ import { Trip } from './trip';
 import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } from './talk';
 import { Rory } from './rory';
 import { initTouch, isTouchDevice } from './touch';
+import { Streaks, REWARD_INFO, type Reward } from './streaks';
 import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, type PickupType, type BlastSpec } from './weapons';
 import { Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
@@ -150,6 +151,9 @@ const pickupSpots: { type: PickupType; pos: THREE.Vector3 }[] = [];
 }
 const pickups = new WeaponPickups(scene, pickupSpots);
 
+// kill-streak rewards: turret, air strike, nuke
+const streaks = new Streaks(scene, world, grid, pee, fx, weapons, () => everyone);
+
 // Rory: big, blond, unkillable
 const rory = new Rory(scene, world, nav, (text) => {
   const sp = sound.spatial(rory.pos.x, rory.pos.z);
@@ -182,6 +186,8 @@ const elPrompt = $('prompt');
 const elChatter = $('chatter');
 const elWeapon = $('weaponline');
 const elScope = $('scope');
+const elStreak = $('streakline');
+const elFlash = $('flash');
 const mini = $('minimap') as HTMLCanvasElement;
 const miniCtx = mini.getContext('2d')!;
 
@@ -326,6 +332,8 @@ function resetWeapons() {
   zooming = false;
 }
 let streak = 0;
+const rewards: Reward[] = [];
+let noStreakT = 0; // the nuke's own kills do not start a new streak
 let idleT = 3;
 let fillerT = 40;
 let warned50 = false;
@@ -360,6 +368,9 @@ function newMatch() {
   pickups.reset();
   chaosIn = 45 + Math.random() * 30;
   streak = 0;
+  rewards.length = 0;
+  noStreakT = 0;
+  streaks.clear();
   warned50 = warned20 = false;
   zones.reset(forest.zones);
   potions.reset();
@@ -464,13 +475,17 @@ function registerKill(victim: Combatant, from: Combatant | null, kind: PeeKind) 
   tickets[victim.team] = Math.max(0, tickets[victim.team] - 1);
   const killer = from?.name ?? 'The forest';
   feedPush(`${killer} ${killVerbBy(kind)} ${victim.name}`, victim.team === 1 ? '#a8f0a8' : '#ffa0a0');
-  if (from?.isPlayer) {
+  const credit = (from as { owner?: Combatant } | null)?.owner ?? from; // a turret's kills are its owner's
+  if (credit?.isPlayer) {
     kills++;
-    streak++;
-    if (streak === 3) announcer('streak3');
-    else if (streak === 5) announcer('streak5');
-    else if (streak === 10) announcer('streak10');
-    else if (Math.random() < 0.4) playerSay('kill');
+    if (noStreakT <= 0) {
+      streak++;
+      if (streak === REWARD_INFO.turret.at) earn('turret');
+      else if (streak === REWARD_INFO.airstrike.at) earn('airstrike');
+      else if (streak === REWARD_INFO.nuke.at) earn('nuke');
+      else if (streak === 10) announcer('streak10');
+      else if (Math.random() < 0.4) playerSay('kill');
+    }
   }
   if (victim.isPlayer) { streak = 0; if (Math.random() < 0.6) playerSay('death'); }
   const sp = sound.spatial(victim.pos.x, victim.pos.z);
@@ -587,6 +602,55 @@ function selectWeapon(w: Wpn) {
   sound.uiClick();
 }
 
+function earn(r: Reward) {
+  rewards.push(r);
+  banner(`${REWARD_INFO[r].name.toUpperCase()} READY! PRESS R`, 3);
+  announcer(r);
+  sound.powerUp();
+}
+
+/** Where the crosshair meets the ground, for calling in strikes. */
+function aimGround(maxD: number): THREE.Vector3 {
+  camera.updateMatrixWorld();
+  camera.getWorldDirection(wDir);
+  player.eyePos(wOrigin);
+  const t = world.raycast(wOrigin, wDir, maxD);
+  if (t < maxD - 0.01 && wDir.y < 0.5) return new THREE.Vector3(wOrigin.x + wDir.x * t, 0, wOrigin.z + wDir.z * t);
+  const fl = Math.hypot(wDir.x, wDir.z) || 1; // looking at the sky: drop it 40m ahead instead
+  return new THREE.Vector3(wOrigin.x + (wDir.x / fl) * 40, 0, wOrigin.z + (wDir.z / fl) * 40);
+}
+
+function useReward() {
+  if (!player.alive || !locked || !rewards.length) return;
+  const r = rewards.shift()!;
+  const kind: PeeKind = player.potion?.kind ?? 'normal';
+  if (r === 'turret') {
+    let at = new THREE.Vector3(player.pos.x - Math.sin(player.yaw) * 4.5, 0, player.pos.z - Math.cos(player.yaw) * 4.5);
+    if (!nav.isFreeAt(at.x, at.z)) at = new THREE.Vector3(player.pos.x - Math.sin(player.yaw) * 2.4, 0, player.pos.z - Math.cos(player.yaw) * 2.4);
+    streaks.deployTurret(player, 0, at, player.yaw, kind, FACTION_INFO[faction].hex);
+    banner('PISS TURRET DEPLOYED', 2);
+    sound.mount();
+  } else if (r === 'airstrike') {
+    streaks.callStrike(player, aimGround(120), player.yaw, kind);
+    banner('AIR STRIKE INBOUND!', 2.5);
+    announcer('strike_call');
+  } else {
+    streaks.callNuke(player, 0, aimGround(220));
+    banner('☢ PISS NUKE IN 4 SECONDS ☢', 3.5);
+    announcer('nuke_call');
+  }
+}
+
+streaks.hooks = {
+  flash: (a) => { elFlash.style.opacity = String(a); },
+  shake: (a) => { player.shake = Math.max(player.shake, a); },
+  sound: (what) => { if (what === 'siren') sound.siren(3.6); else if (what === 'flyby') sound.flyby(); else sound.nukeBoom(); },
+  blastMounts: (at, radius) => {
+    for (const m of mounts.list) if (m.alive && Math.hypot(m.pos.x - at.x, m.pos.z - at.z) < radius) m.damage(9999, 'normal', player);
+  },
+  nukeFired: () => { streak = 0; noStreakT = 4; },
+};
+
 function cycleWeapon() {
   const order: Wpn[] = ['pee', 'sniper', 'launcher'];
   for (let k = 1; k <= 3; k++) {
@@ -684,6 +748,7 @@ function toggleRide() {
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
   if (e.code === 'KeyG' && !e.repeat) throwPlayerJug();
+  if (e.code === 'KeyR' && !e.repeat) useReward();
   if (e.code === 'Digit1') selectWeapon('pee');
   if (e.code === 'Digit2') selectWeapon('sniper');
   if (e.code === 'Digit3') selectWeapon('launcher');
@@ -847,6 +912,8 @@ function renderHud() {
   elBladder.style.background = col;
   elHp.textContent = `♥ ${Math.ceil(player.hp)}${player.armor > 0 ? `  ⛨ ${Math.ceil(player.armor)}` : ''}${player.status.burn > 0 ? ' 🔥' : ''}${player.status.chill > 0.2 ? ' ❄' : ''}${player.status.poison > 0 ? ' ☠' : ''}`;
   elStats.textContent = `Drenched ${kills} · Defeated ${deaths}`;
+  const nextAt = streak < 3 ? 3 : streak < 5 ? 5 : streak < 8 ? 8 : 0;
+  elStreak.textContent = (rewards.length ? `READY: ${rewards.map((r) => REWARD_INFO[r].name).join(', ')} (R)   ` : '') + (streak > 0 ? `Streak ${streak}${nextAt ? ` → ${nextAt}` : ''}` : '');
   const wname = weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? `Piss Sniper ×${ammoSniper}` : `Piss Launcher ×${ammoLauncher}`;
   elWeapon.textContent = `[${wname}]${jugs ? `  Jugs ×${jugs} (G)` : ''}${ammoSniper && weapon !== 'sniper' ? '  2: sniper' : ''}${ammoLauncher && weapon !== 'launcher' ? '  3: launcher' : ''}`;
   if (player.mount) {
@@ -1060,6 +1127,9 @@ function simulate(dt: number) {
   if (player.alive && player.hp < hpBefore - 0.5) sound.hurt();
 
   for (const f of fighters) f.update(dt, fightCtx);
+  noStreakT = Math.max(0, noStreakT - dt);
+  for (const t of streaks.turrets) if (t.alive) grid.insert(t);
+  streaks.update(dt);
   rory.update(dt, player);
   weapons.update(dt);
   pickups.update(dt, time, grid, (p, who) => {
@@ -1102,6 +1172,7 @@ function simulate(dt: number) {
     mounts.dismount(player);
     sound.cannon(false);
     resetWeapons();
+    rewards.length = 0;
     registerKill(player, player.lastFrom, player.lastKind);
     respawnT = PLAYER_RESPAWN;
     banner(pick(['YOU WERE DRENCHED', 'WELL, THAT STINGS', 'RIP. THE FOREST IS UNIMPRESSED', 'SPLOOSH. YOU ARE DONE']), 2.2);
@@ -1218,6 +1289,7 @@ if (touchMode) {
     jug: throwPlayerJug,
     cycleWeapon,
     shout: () => { if (locked && player.alive) playerSay('shout', 2); },
+    streak: useReward,
     pause: () => { fallback = false; setRunning(false); },
     status: () => ({
       weapon: weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? 'Piss Sniper' : 'Piss Launcher',
@@ -1226,6 +1298,7 @@ if (touchMode) {
       riding: !!player.mount,
       canRide: !!mounts.nearestFree(player.pos.x, player.pos.z, 3.6),
       running: locked,
+      reward: rewards.length ? (rewards[0] === 'turret' ? 'TURRET' : rewards[0] === 'airstrike' ? 'STRIKE' : 'NUKE') : '',
     }),
   });
   touchGoFull = t.goFull;
@@ -1239,7 +1312,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  weapons, pickups, giveWeapon, resetWeapons, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
+  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   setFaction, newMatch, applyHit, respawnPoint, sim: simulate,

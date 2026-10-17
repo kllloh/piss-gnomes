@@ -17,6 +17,7 @@ export interface BlastSpec {
 }
 export const JUG_BLAST: BlastSpec = { radius: 5, dmg: 55 };
 export const ROCKET_BLAST: BlastSpec = { radius: 6.5, dmg: 70 };
+export const BOMB_BLAST: BlastSpec = { radius: 8.5, dmg: 95 };
 
 interface Proj {
   mesh: THREE.Group;
@@ -27,6 +28,7 @@ interface Proj {
   shooter: Combatant;
   age: number;
   mat: THREE.MeshBasicMaterial;
+  blast?: BlastSpec;
 }
 
 interface Beam {
@@ -154,7 +156,7 @@ export class Weapons {
 
   constructor(private scene: THREE.Scene, private world: World, private grid: SpatialGrid) {}
 
-  private spawn(kind: 'jug' | 'rocket', shooter: Combatant, origin: THREE.Vector3, dir: THREE.Vector3, speed: number, pee: PeeKind) {
+  private spawn(kind: 'jug' | 'rocket', shooter: Combatant, origin: THREE.Vector3, dir: THREE.Vector3, speed: number, pee: PeeKind, blast?: BlastSpec): Proj {
     const color = PEE[pee].color;
     let mesh: THREE.Group;
     const mat = new THREE.MeshBasicMaterial({ color });
@@ -166,10 +168,17 @@ export class Weapons {
       mesh.add(new THREE.Mesh(new SoftBox(0.3, 0.3, 0.3, 0.45), new THREE.MeshBasicMaterial({ color: 0xffffff })));
     }
     this.scene.add(mesh);
-    const p: Proj = { mesh, pos: origin.clone(), vel: dir.clone().multiplyScalar(speed), kind, pee, shooter, age: 0, mat };
+    const p: Proj = { mesh, pos: origin.clone(), vel: dir.clone().multiplyScalar(speed), kind, pee, shooter, age: 0, mat, blast };
     mesh.position.copy(p.pos);
     this.projs.push(p);
     if (this.projs.length > 60) this.kill(this.projs.shift()!);
+    return p;
+  }
+
+  /** An air-strike bomb: a huge jug falling out of the sky. */
+  dropBomb(shooter: Combatant, x: number, z: number, pee: PeeKind) {
+    const p = this.spawn('jug', shooter, new THREE.Vector3(x, 60, z), new THREE.Vector3(0, -1, 0), 30, pee, BOMB_BLAST);
+    p.mesh.scale.setScalar(2.4);
   }
 
   throwJug(shooter: Combatant, origin: THREE.Vector3, dir: THREE.Vector3, pee: PeeKind) {
@@ -267,7 +276,7 @@ export class Weapons {
       if (boom || p.age > 6) {
         this.kill(p);
         this.projs.splice(i, 1);
-        this.onExplode?.(tmp.copy(p.pos), p.kind === 'jug' ? JUG_BLAST : ROCKET_BLAST, p.pee, p.shooter, p.kind === 'rocket');
+        this.onExplode?.(tmp.copy(p.pos), p.blast ?? (p.kind === 'jug' ? JUG_BLAST : ROCKET_BLAST), p.pee, p.shooter, p.kind === 'rocket' || !!p.blast);
         continue;
       }
       p.mesh.position.copy(p.pos);

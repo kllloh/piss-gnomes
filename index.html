@@ -40,6 +40,8 @@
   @keyframes glow { from { box-shadow: 0 0 8px rgba(255,60,200,.5); } to { box-shadow: 0 0 16px rgba(60,200,255,.6); } }
   #mountinfo { position: fixed; left: 18px; bottom: 150px; width: 300px; padding: 8px 14px; pointer-events: none; font-size: 15px; display: none; border-color: rgba(255,64,160,.6); }
   #chatter { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); max-width: 60vw; padding: 8px 18px; font-size: 20px; text-align: center; opacity: 0; transition: opacity .25s; pointer-events: none; text-shadow: 0 0 4px #000; background: rgba(8,12,28,.6); border-radius: 8px; }
+  #flash { position: fixed; inset: 0; background: #fff8c0; opacity: 0; pointer-events: none; z-index: 20; }
+  #streakline { margin-top: 3px; font-size: 13px; color: #ffd070; }
   #scope { position: fixed; inset: 0; pointer-events: none; display: none; background: radial-gradient(circle at center, transparent 0, transparent 24vmin, #05020c 24.4vmin); }
   #scope::before, #scope::after { content: ''; position: absolute; background: rgba(25,227,255,.8); box-shadow: 0 0 6px #19e3ff; }
   #scope::before { left: 50%; top: calc(50% - 24vmin); width: 1px; height: 48vmin; }
@@ -67,10 +69,12 @@
   <div class="bar"><div id="bladderfill" class="fill"></div></div>
   <div id="hp">♥ 100</div>
   <div id="weaponline"></div>
+  <div id="streakline"></div>
 </div>
 <div id="mountinfo" class="glass"></div>
 <div id="prompt"></div>
 <div id="scope"></div>
+<div id="flash"></div>
 <div id="chatter"></div>
 <div id="stats"></div>
 <div id="hit"></div>
@@ -91,6 +95,7 @@
   <p>Giant <b style="color:#ff60e0">spiders, beetles and ladybugs</b> wander the forest. Walk up and press <b>E</b> to ride one: it has a pee cannon and soaks up the damage for you.</p>
   <p><b style="color:#f2d83a">Weapon crates</b> are scattered about: <b>Piss Jugs</b> (grenades, G), the <b style="color:#19e3ff">Piss Sniper</b> (2, right-click to zoom) and the <b style="color:#ff2bd6">Piss Launcher</b> (3). Q cycles weapons, 1 is your bladder.</p>
   <p id="touchhint" style="display:none;color:#ff7af0">Touch: left side = move stick, drag anywhere else to look, big button = pee. Buttons: JUMP, JUG (grenade), SWAP (weapon), RIDE, YELL, ZOOM (sniper).</p>
+  <p><b style="color:#ffd070">Kill streaks</b> (no dying): 3 kills = <b>Piss Turret</b>, 5 = <b>Piss Air Strike</b>, 8 = <b>Piss Nuke</b>. Press <b>R</b> to use your next reward.</p>
   <p>WASD move · Space jump · Shift walk · Mouse aim (aim up for range!) · Hold click to pee · E ride / hop off · Esc pause</p>
   <p>V shout · M voices · N music · T trip level (full / mild / off) · H PS2 look on/off. Every minute or so the forest goes properly feral: moon gravity, rainbow rain, titan gnomes...</p>
   <p> Flashing colours and warping: turn it down with T if that bothers you.</p>
