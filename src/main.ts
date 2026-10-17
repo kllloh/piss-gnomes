@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World } from './world';
 import { buildForest, HALF } from './forest';
+import { buildDesert } from './desert';
 import { NavGrid } from './nav';
 import { Player } from './player';
 import { Fighter, type FightCtx } from './fighter';
@@ -81,7 +82,13 @@ scene.add(camera);
 
 // --- game objects ----------------------------------------------------------------------
 const world = new World(HALF);
-const forest = buildForest(world, scene);
+const MAP: 'forest' | 'desert' = (() => {
+  const q = new URLSearchParams(location.search).get('map');
+  if (q === 'desert' || q === 'forest') return q;
+  try { if (localStorage.getItem('pg-map') === 'desert') return 'desert'; } catch { /* storage unavailable */ }
+  return 'forest';
+})();
+const forest = MAP === 'desert' ? buildDesert(world, scene) : buildForest(world, scene);
 const nav = new NavGrid(world);
 const player = new Player(world, camera);
 const fx = new Effects(scene);
@@ -92,6 +99,13 @@ const zones = new Zones(world, forest.zones);
 const potions = new Potions(scene, forest.potionSpots);
 const music = new Music(() => sound.context);
 const trip = new Trip(renderer, scene);
+trip.theme = MAP;
+if (MAP === 'desert') { // hot and bright
+  hemi.intensity = 2.1;
+  moon.intensity = 2.4;
+  fog.near = 45;
+  fog.far = 200;
+}
 
 // giant bugs to ride: a few at each base, a couple around every zone
 const mountSpots: MountSpot[] = [];
@@ -725,6 +739,41 @@ renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0) f
 window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) zooming = false; });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousemove', (e) => { if (locked) player.look(e.movementX, e.movementY); });
+const GFX = ['ps2', 'mgs', 'hd'] as const;
+const GFX_NAMES = { ps2: 'PLAYSTATION 2', mgs: 'METAL GEAR', hd: 'HD' };
+function refreshOptions() {
+  for (const el of document.querySelectorAll<HTMLElement>('.opt-card')) {
+    el.classList.toggle('selected', el.dataset.g ? el.dataset.g === trip.style : el.dataset.m === MAP);
+  }
+}
+function setGfx(g: (typeof GFX)[number], announce = true) {
+  trip.style = g;
+  document.body.classList.toggle('mgs', g === 'mgs');
+  try { localStorage.setItem('pg-gfx', g); } catch { /* ignore */ }
+  refreshOptions();
+  if (announce) banner(`GRAPHICS: ${GFX_NAMES[g]}`, 1.2);
+}
+for (const el of document.querySelectorAll<HTMLElement>('.opt-card')) {
+  el.addEventListener('click', (e) => {
+    e.stopPropagation(); // choosing an option should not start the game
+    if (el.dataset.g) setGfx(el.dataset.g as (typeof GFX)[number], false);
+    else if (el.dataset.m && el.dataset.m !== MAP) {
+      try { localStorage.setItem('pg-map', el.dataset.m); } catch { /* ignore */ }
+      const u = new URL(location.href);
+      u.searchParams.set('map', el.dataset.m);
+      location.href = u.toString(); // the map is built once at start-up, so reload with the new one
+    }
+  });
+}
+{
+  let g: (typeof GFX)[number] = 'ps2';
+  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'mgs' || s === 'hd') g = s; } catch { /* ignore */ }
+  const q = new URLSearchParams(location.search).get('gfx');
+  if (q === 'ps2' || q === 'mgs' || q === 'hd') g = q;
+  setGfx(g, false);
+  $('subtitle').textContent = `${MAP === 'desert' ? 'Desert Trip' : 'The Enchanted Forest'} · 50 v 50 · ride giant bugs · capture the zones`;
+}
+
 function toggleRide() {
   if (!player.alive || !locked) return;
   if (player.mount) {
@@ -762,10 +811,7 @@ window.addEventListener('keydown', (e) => {
     trip.level = (trip.level + 2) % 3; // 2 -> 1 -> 0 -> 2
     banner(['TRIP: OFF (BORING)', 'TRIP: MILD', 'TRIP: FULL SEND'][trip.level], 1.2);
   }
-  if (e.code === 'KeyH') {
-    trip.ink = trip.ink > 0 ? 0 : 1;
-    banner(trip.ink > 0 ? 'ART: PS2' : 'ART: HD', 1.2);
-  }
+  if (e.code === 'KeyH') setGfx(GFX[(GFX.indexOf(trip.style) + 1) % GFX.length]);
   if (e.code === 'KeyN') {
     music.setEnabled(!music.on);
     banner(music.on ? 'MUSIC ON' : 'MUSIC OFF', 1);
@@ -1234,9 +1280,15 @@ function psychedelia(dt: number, vt: number, beat: number) {
   trip.horizon(vt, fogCol);
   fog.color.copy(fogCol);
   (scene.background as THREE.Color).copy(fogCol);
-  hemi.color.setHSL((vt * 0.02) % 1, 0.55, 0.72);
-  hemi.groundColor.setHSL((vt * 0.02 + 0.5) % 1, 0.5, 0.26);
-  moon.color.setHSL((vt * 0.03 + 0.6) % 1, 0.45, 0.82);
+  if (MAP === 'desert') {
+    hemi.color.setHSL(0.11 + Math.sin(vt * 0.05) * 0.03, 0.55, 0.9);
+    hemi.groundColor.setHSL(0.07 + Math.sin(vt * 0.04) * 0.03, 0.55, 0.62);
+    moon.color.setHSL(0.12, 0.8, 0.92);
+  } else {
+    hemi.color.setHSL((vt * 0.02) % 1, 0.55, 0.72);
+    hemi.groundColor.setHSL((vt * 0.02 + 0.5) % 1, 0.5, 0.26);
+    moon.color.setHSL((vt * 0.03 + 0.6) % 1, 0.45, 0.82);
+  }
   const scoped = zooming && weapon === 'sniper' && player.alive;
   const fovTarget = scoped ? 22 : 75 + (Math.sin(vt * 0.7) * 2 + beat * 2.5) * ampNow * lvl + (player.mount ? 6 : 0);
   player.sens = scoped ? 0.3 : 1;
@@ -1280,7 +1332,7 @@ function tick() {
   }
 
   sound.setListener(camera.position.x, camera.position.z, camera.rotation.y);
-  trip.render(scene, camera, vt, ampNow, beat, tintNow);
+  trip.render(scene, camera, vt, ampNow * (trip.style === 'mgs' ? 0.2 : MAP === 'desert' ? 0.7 : 1), beat, tintNow);
 }
 
 if (touchMode) {

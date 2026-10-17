@@ -19,10 +19,26 @@ void main() {
 
 const SKY_FRAG = `
 uniform float time;
+uniform float hot;
 varying vec3 vDir;
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 void main() {
   vec3 d = normalize(vDir);
+  if (hot > 0.5) {
+    // Desert Trip: a hot, bright, swirling day sky
+    vec3 base = mix(vec3(1.0, 0.72, 0.3), vec3(0.15, 0.75, 1.0), smoothstep(-0.05, 0.85, d.y));
+    float sw = d.y * 1.2 + sin(d.x * 3.0 + time * 0.25) * 0.3 + sin(d.z * 4.0 - time * 0.2) * 0.3 + sin(atan(d.z, d.x) * 6.0 + d.y * 8.0 + time * 0.4) * 0.15;
+    vec3 pal = 0.5 + 0.5 * cos(6.2832 * (vec3(sw * 0.7 + time * 0.04) + vec3(0.0, 0.12, 0.28)));
+    vec3 c = mix(base, pal, 0.38);
+    c += 0.12 * sin(d.y * 60.0 - time * 2.0) * smoothstep(0.35, 0.0, d.y); // heat shimmer near the horizon
+    vec3 sm = normalize(vec3(0.3, 0.62, -0.72));
+    float sd = acos(clamp(dot(d, sm), -1.0, 1.0));
+    c = mix(c, vec3(1.0, 0.98, 0.8), smoothstep(0.2, 0.17, sd));
+    c += 0.2 * (0.5 + 0.5 * sin(sd * 36.0 - time * 3.0)) * smoothstep(0.9, 0.2, sd) * vec3(1.0, 0.7, 0.3);
+    c = floor(c * 9.0 + 0.5) / 9.0;
+    gl_FragColor = vec4(c, 1.0);
+    return;
+  }
   float swirl = d.y * 0.9 + sin(d.x * 3.0 + time * 0.2) * 0.25 + sin(d.z * 4.0 - time * 0.15) * 0.25
               + sin(atan(d.z, d.x) * 5.0 + d.y * 6.0 + time * 0.3) * 0.12;
   float t = swirl + time * 0.03;
@@ -56,6 +72,7 @@ uniform float amp;
 uniform float pulse;
 uniform float tint;
 uniform float ink;
+uniform float mgs;
 uniform vec2 res;
 varying vec2 vUv;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -100,14 +117,29 @@ void main() {
               + texture2D(tDiffuse, vUv + px * vec2(0.0, 2.0)).rgb + texture2D(tDiffuse, vUv - px * vec2(0.0, 2.0)).rgb;
     col += max(glow * 0.25 - 0.6, 0.0) * 0.4 * ink;
     float l = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(l), col, 1.0 + 0.3 * ink);
+    if (mgs > 0.5) {
+      // Metal Gear Solid: drained, cold and grainy, with crushed blacks
+      col = mix(vec3(l), col, 0.4);
+      col *= vec3(0.78, 1.0, 0.86);
+      col = pow(max(col, 0.0), vec3(1.2)) * 1.3;
+    } else {
+      col = mix(vec3(l), col, 1.0 + 0.3 * ink);
+    }
     vec2 q = mod(floor(vUv * res), 4.0);
     float ba = mod(q.x, 2.0), bb = floor(q.x / 2.0), bc = mod(q.y, 2.0), bd = floor(q.y / 2.0);
     float bayer = (8.0 * abs(ba - bc) + 4.0 * bc + 2.0 * abs(bb - bd) + bd) / 16.0;
     vec3 pc = sqrt(col);
-    pc = floor((pc + (bayer - 0.5) / 14.0) * 31.0 + 0.5) / 31.0;
+    float lv = mgs > 0.5 ? 15.0 : 31.0;
+    pc = floor((pc + (bayer - 0.5) / (mgs > 0.5 ? 9.0 : 14.0)) * lv + 0.5) / lv;
     col = pc * pc;
-    col *= 1.0 - 0.07 * ink * step(0.5, fract(vUv.y * res.y * 0.5)); // faint interlace lines
+    col *= 1.0 - (mgs > 0.5 ? 0.2 : 0.07) * ink * step(0.5, fract(vUv.y * res.y * 0.5)); // interlace lines
+    if (mgs > 0.5) {
+      float grain = hash12(gl_FragCoord.xy + floor(time * 24.0) * 7.0);
+      col += (grain - 0.5) * 0.09;
+      float r2 = length(vUv - 0.5);
+      col *= 1.0 - smoothstep(0.3, 0.85, r2) * 0.65;
+      if (vUv.y < 0.1 || vUv.y > 0.9) col = vec3(0.0); // cinematic bars
+    }
   }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -117,6 +149,24 @@ void main() {
 export class Trip {
   /** 0 = off, 1 = mild, 2 = full. */
   level = 2;
+  private _theme: 'forest' | 'desert' = 'forest';
+  private _style: 'ps2' | 'mgs' | 'hd' = 'ps2';
+  get theme() {
+    return this._theme;
+  }
+  set theme(v: 'forest' | 'desert') {
+    this._theme = v;
+    (this.sky.material as THREE.ShaderMaterial).uniforms.hot.value = v === 'desert' ? 1 : 0;
+  }
+  get style() {
+    return this._style;
+  }
+  /** The graphics option: PlayStation 2, Metal Gear Solid, or plain HD. */
+  set style(v: 'ps2' | 'mgs' | 'hd') {
+    this._style = v;
+    this.uniforms.mgs.value = v === 'mgs' ? 1 : 0;
+    this.ink = v === 'hd' ? 0 : 1;
+  }
   private _ink = 1;
   /** PlayStation 2 look, 0..1: 480p picture, dither, bloom. */
   get ink(): number {
@@ -138,6 +188,7 @@ export class Trip {
     pulse: { value: 0 },
     tint: { value: 0 },
     ink: { value: 1 },
+    mgs: { value: 0 },
     res: { value: new THREE.Vector2(1, 1) },
   };
   private sky: THREE.Mesh;
@@ -153,7 +204,7 @@ export class Trip {
     this.sky = new THREE.Mesh(
       new THREE.SphereGeometry(90, 32, 16),
       new THREE.ShaderMaterial({
-        uniforms: { time: { value: 0 } },
+        uniforms: { time: { value: 0 }, hot: { value: 0 } },
         vertexShader: SKY_VERT,
         fragmentShader: SKY_FRAG,
         side: THREE.BackSide,
@@ -219,6 +270,7 @@ export class Trip {
 
   /** Match the fog to the horizon colour of the sky so distance fades into the swirl. */
   horizon(t: number, out: THREE.Color): THREE.Color {
+    if (this._theme === 'desert') return out.setRGB(0.99, 0.8, 0.52).lerp(palette(t * 0.05, new THREE.Color()), 0.1);
     palette(t * 0.03, out).multiplyScalar(0.22);
     return out;
   }

@@ -51,6 +51,11 @@ npm run build      # single self-contained dist/index.html you can double-click
   generative music engine that plays weird scales in odd time signatures. The scale changes with your potion.
 - **Rory:** a huge, blond, bowl-cut NPC (twice a gnome's size) who wanders the forest and cannot be killed. Get close and he says "Me Rory".
 - **Talking:** everyone never shuts up: gnomes shout when they spot you, get hit, burn, ride bugs (which have names), lose bugs, capture zones or just hallucinate. A deranged announcer commentates, and every minute or so a chaos event hits (moon gravity, rainbow rain, turbo pee, titan gnomes, bug stampede, disco speed). **V** shouts a battle cry.
+- **Maps:** pick on the start screen (the page reloads with the new map). **The Enchanted Forest** is the original night
+  forest. **Desert Trip** is a hot, bright, hallucinogenic desert: neon cacti, striped mesas, an oasis, giant bones, a
+  spinning sun over the Sun Temple, floating mirage orbs and a swirling day sky. Same zones, bugs, weapons and bots.
+- **Graphics options** (start screen, or **H** to cycle): **PS2** (below), **Metal Gear** (drained cold-green picture, heavy
+  film grain, crushed blacks, cinematic bars, green radar-style minimap and a codec-ish HUD) and plain **HD**.
 - **Art:** blocky PlayStation 2 style: hard-edged low-poly shapes, chunky low-res textures, a 480p picture with dithered 5-bit colour, bloom and interlace lines, on top of the psychedelic sky and warping. Neon 80s UI. **H** switches between PS2 and HD.
 - **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. **T** cycles full / mild / off.
 - **Phones and tablets:** touch controls appear automatically: a floating move stick on the left, drag anywhere else to look, a big PEE/FIRE button (drag it to aim while firing), plus JUMP, JUG, SWAP, RIDE, ZOOM (with the sniper), YELL and pause. Play in landscape; the first tap goes fullscreen where the browser allows it.
