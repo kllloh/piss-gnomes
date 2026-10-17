@@ -72,7 +72,6 @@ uniform float amp;
 uniform float pulse;
 uniform float tint;
 uniform float ink;
-uniform float mgs;
 uniform vec2 res;
 varying vec2 vUv;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -117,29 +116,14 @@ void main() {
               + texture2D(tDiffuse, vUv + px * vec2(0.0, 2.0)).rgb + texture2D(tDiffuse, vUv - px * vec2(0.0, 2.0)).rgb;
     col += max(glow * 0.25 - 0.6, 0.0) * 0.4 * ink;
     float l = dot(col, vec3(0.299, 0.587, 0.114));
-    if (mgs > 0.5) {
-      // Metal Gear Solid: drained, cold and grainy, with crushed blacks
-      col = mix(vec3(l), col, 0.4);
-      col *= vec3(0.78, 1.0, 0.86);
-      col = pow(max(col, 0.0), vec3(1.2)) * 1.3;
-    } else {
-      col = mix(vec3(l), col, 1.0 + 0.3 * ink);
-    }
+    col = mix(vec3(l), col, 1.0 + 0.3 * ink);
     vec2 q = mod(floor(vUv * res), 4.0);
     float ba = mod(q.x, 2.0), bb = floor(q.x / 2.0), bc = mod(q.y, 2.0), bd = floor(q.y / 2.0);
     float bayer = (8.0 * abs(ba - bc) + 4.0 * bc + 2.0 * abs(bb - bd) + bd) / 16.0;
     vec3 pc = sqrt(col);
-    float lv = mgs > 0.5 ? 15.0 : 31.0;
-    pc = floor((pc + (bayer - 0.5) / (mgs > 0.5 ? 9.0 : 14.0)) * lv + 0.5) / lv;
+    pc = floor((pc + (bayer - 0.5) / 14.0) * 31.0 + 0.5) / 31.0;
     col = pc * pc;
-    col *= 1.0 - (mgs > 0.5 ? 0.2 : 0.07) * ink * step(0.5, fract(vUv.y * res.y * 0.5)); // interlace lines
-    if (mgs > 0.5) {
-      float grain = hash12(gl_FragCoord.xy + floor(time * 24.0) * 7.0);
-      col += (grain - 0.5) * 0.09;
-      float r2 = length(vUv - 0.5);
-      col *= 1.0 - smoothstep(0.3, 0.85, r2) * 0.65;
-      if (vUv.y < 0.1 || vUv.y > 0.9) col = vec3(0.0); // cinematic bars
-    }
+    col *= 1.0 - 0.07 * ink * step(0.5, fract(vUv.y * res.y * 0.5)); // faint interlace lines
   }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -150,7 +134,7 @@ export class Trip {
   /** 0 = off, 1 = mild, 2 = full. */
   level = 2;
   private _theme: 'forest' | 'desert' = 'forest';
-  private _style: 'ps2' | 'mgs' | 'hd' = 'ps2';
+  private _style: 'ps2' | 'hd' = 'ps2';
   get theme() {
     return this._theme;
   }
@@ -161,10 +145,9 @@ export class Trip {
   get style() {
     return this._style;
   }
-  /** The graphics option: PlayStation 2, Metal Gear Solid, or plain HD. */
-  set style(v: 'ps2' | 'mgs' | 'hd') {
+  /** The graphics option: PlayStation 2 or plain HD. */
+  set style(v: 'ps2' | 'hd') {
     this._style = v;
-    this.uniforms.mgs.value = v === 'mgs' ? 1 : 0;
     this.ink = v === 'hd' ? 0 : 1;
   }
   private _ink = 1;
@@ -188,7 +171,6 @@ export class Trip {
     pulse: { value: 0 },
     tint: { value: 0 },
     ink: { value: 1 },
-    mgs: { value: 0 },
     res: { value: new THREE.Vector2(1, 1) },
   };
   private sky: THREE.Mesh;

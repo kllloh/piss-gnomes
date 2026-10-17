@@ -739,8 +739,8 @@ renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0) f
 window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) zooming = false; });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousemove', (e) => { if (locked) player.look(e.movementX, e.movementY); });
-const GFX = ['ps2', 'mgs', 'hd'] as const;
-const GFX_NAMES = { ps2: 'PLAYSTATION 2', mgs: 'METAL GEAR', hd: 'HD' };
+const GFX = ['ps2', 'hd'] as const;
+const GFX_NAMES = { ps2: 'PLAYSTATION 2', hd: 'HD' };
 function refreshOptions() {
   for (const el of document.querySelectorAll<HTMLElement>('.opt-card')) {
     el.classList.toggle('selected', el.dataset.g ? el.dataset.g === trip.style : el.dataset.m === MAP);
@@ -748,7 +748,6 @@ function refreshOptions() {
 }
 function setGfx(g: (typeof GFX)[number], announce = true) {
   trip.style = g;
-  document.body.classList.toggle('mgs', g === 'mgs');
   try { localStorage.setItem('pg-gfx', g); } catch { /* ignore */ }
   refreshOptions();
   if (announce) banner(`GRAPHICS: ${GFX_NAMES[g]}`, 1.2);
@@ -767,9 +766,9 @@ for (const el of document.querySelectorAll<HTMLElement>('.opt-card')) {
 }
 {
   let g: (typeof GFX)[number] = 'ps2';
-  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'mgs' || s === 'hd') g = s; } catch { /* ignore */ }
+  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'hd') g = s; } catch { /* ignore */ }
   const q = new URLSearchParams(location.search).get('gfx');
-  if (q === 'ps2' || q === 'mgs' || q === 'hd') g = q;
+  if (q === 'ps2' || q === 'hd') g = q;
   setGfx(g, false);
   $('subtitle').textContent = `${MAP === 'desert' ? 'Desert Trip' : 'The Enchanted Forest'} · 50 v 50 · ride giant bugs · capture the zones`;
 }
@@ -1332,7 +1331,7 @@ function tick() {
   }
 
   sound.setListener(camera.position.x, camera.position.z, camera.rotation.y);
-  trip.render(scene, camera, vt, ampNow * (trip.style === 'mgs' ? 0.2 : MAP === 'desert' ? 0.7 : 1), beat, tintNow);
+  trip.render(scene, camera, vt, ampNow * (MAP === 'desert' ? 0.7 : 1), beat, tintNow);
 }
 
 if (touchMode) {
