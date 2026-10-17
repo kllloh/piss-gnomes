@@ -15,18 +15,11 @@ export class Markers {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
     const g = c.getContext('2d')!;
-    // a chunky downward-pointing arrow with a dark outline
+    // a plain downward-pointing arrow, no outline
     g.beginPath();
-    g.moveTo(8, 10);
-    g.lineTo(56, 10);
-    g.lineTo(32, 56);
-    g.closePath();
-    g.fillStyle = '#05020c';
-    g.fill();
-    g.beginPath();
-    g.moveTo(16, 16);
-    g.lineTo(48, 16);
-    g.lineTo(32, 46);
+    g.moveTo(6, 8);
+    g.lineTo(58, 8);
+    g.lineTo(32, 58);
     g.closePath();
     g.fillStyle = '#ffffff';
     g.fill();
@@ -46,7 +39,7 @@ export class Markers {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
           // a steady on-screen size, a little bigger when close
-          gl_PointSize = clamp(420.0 / max(-mv.z, 1.0), 14.0, 34.0) * pxScale;
+          gl_PointSize = clamp(260.0 / max(-mv.z, 1.0), 9.0, 20.0) * pxScale;
         }`,
       fragmentShader: `
         uniform sampler2D map;
