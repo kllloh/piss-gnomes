@@ -43,6 +43,7 @@ npm run build      # single self-contained dist/index.html you can double-click
   5 kills = **Piss Air Strike** (a smoke pillar where you aim, then nine giant jugs fall in a line), 8 kills =
   **Piss Nuke** (a 4 second siren, then a golden fireball that wipes out every enemy within 90 m of where you aimed;
   your side is safe). Bots shoot at your turret, so protect it.
+- **Testing cheat:** press **I** (or open the page with `?god`) to toggle invincibility. Nothing can hurt you, and the bug you ride is safe too.
 - **Bugs:** Disco Spider (fast, twin cannons), Tank Beetle (slow, tough, shotgun-style cannons), Zoom Ladybug (very
   fast, fragile). Press **E** next to one to ride it; while you ride, the bug takes the damage. Bots ride them too, and
   popped bugs come back after 40 seconds.

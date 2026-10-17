@@ -39,6 +39,8 @@ export class Player implements Rider {
   lastKind: PeeKind = 'normal';
   mount: Mount | null = null;
   armor = 0;
+  /** Testing cheat: nothing can hurt you (press I, or add ?god to the address). */
+  god = false;
   /** Seconds since last losing health; after a few quiet seconds health creeps back. */
   sinceHurt = 99;
   get regen(): boolean {
@@ -83,7 +85,7 @@ export class Player implements Rider {
   }
 
   hurt(amount: number, kind: PeeKind, from: Combatant | null) {
-    if (!this.alive || this.protect > 0) return;
+    if (!this.alive || this.protect > 0 || this.god) return;
     if (this.mount) { // the bug takes it
       this.hurtFlash = Math.min(1, this.hurtFlash + 0.12);
       this.mount.damage(amount, kind, from);
@@ -98,7 +100,7 @@ export class Player implements Rider {
   }
 
   dot(amount: number, kind: PeeKind, from: Combatant | null) {
-    if (!this.alive || this.protect > 0) return;
+    if (!this.alive || this.protect > 0 || this.god) return;
     if (this.mount) { this.mount.damage(amount, kind, from); return; }
     this.hp -= soak(this, amount);
     this.sinceHurt = 0;

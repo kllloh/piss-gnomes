@@ -749,6 +749,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
   if (e.code === 'KeyG' && !e.repeat) throwPlayerJug();
   if (e.code === 'KeyR' && !e.repeat) useReward();
+  if (e.code === 'KeyI' && !e.repeat) {
+    player.god = !player.god;
+    banner(player.god ? 'INVINCIBLE: ON (TESTING)' : 'INVINCIBLE: OFF', 1.4);
+  }
   if (e.code === 'Digit1') selectWeapon('pee');
   if (e.code === 'Digit2') selectWeapon('sniper');
   if (e.code === 'Digit3') selectWeapon('launcher');
@@ -827,6 +831,7 @@ for (const el of document.querySelectorAll<HTMLElement>('.faction-card')) {
   el.addEventListener('click', () => setFaction(el.dataset.f as Faction));
 }
 refreshCards();
+if (location.search.includes('god')) player.god = true;
 if (location.search.includes('run')) { locked = true; elOverlay.style.display = 'none'; } // lets headless tests run without pointer lock
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -910,7 +915,7 @@ function renderHud() {
   elPotionFill.style.background = col;
   elBladder.style.width = `${player.bladder}%`;
   elBladder.style.background = col;
-  elHp.textContent = `♥ ${Math.ceil(player.hp)}${player.armor > 0 ? `  ⛨ ${Math.ceil(player.armor)}` : ''}${player.regen ? ' ✚' : ''}${player.status.burn > 0 ? ' 🔥' : ''}${player.status.chill > 0.2 ? ' ❄' : ''}${player.status.poison > 0 ? ' ☠' : ''}`;
+  elHp.textContent = `${player.god ? '★ INVINCIBLE  ' : ''}♥ ${Math.ceil(player.hp)}${player.armor > 0 ? `  ⛨ ${Math.ceil(player.armor)}` : ''}${player.regen ? ' ✚' : ''}${player.status.burn > 0 ? ' 🔥' : ''}${player.status.chill > 0.2 ? ' ❄' : ''}${player.status.poison > 0 ? ' ☠' : ''}`;
   elStats.textContent = `Drenched ${kills} · Defeated ${deaths}`;
   const nextAt = streak < 3 ? 3 : streak < 5 ? 5 : streak < 8 ? 8 : 0;
   elStreak.textContent = (rewards.length ? `READY: ${rewards.map((r) => REWARD_INFO[r].name).join(', ')} (R)   ` : '') + (streak > 0 ? `Streak ${streak}${nextAt ? ` → ${nextAt}` : ''}` : '');
