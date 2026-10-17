@@ -33,6 +33,7 @@ npm run build      # single self-contained dist/index.html you can double-click
   up to 6). The **Piss Sniper** (2, right-click to zoom) fires an instant beam: 85 damage, more for headshots, 8 shots.
   The **Piss Launcher** (3) fires big slow pee-balls with a splash, 5 shots. 1 goes back to your bladder, Q cycles. Your
   current potion changes what the blast does, and bots pick up and use all of it too.
+- **Health regeneration:** stay out of trouble for 5 seconds (no damage, no burning or poison) and your health creeps back at 9 HP a second; a ✚ shows beside your health. Bots do it too.
 - **Health, armour and pee mods:** **Health Kits** heal 60 and **Armour** (+50, max 100) soaks two thirds of every hit until
   it is gone. Both are left alone if you do not need them. **Double Stream** (35 s) fires two streams at twice the flow, and
   **Swirl Stream** (35 s) fires a corkscrew whose droplets do 2.2x damage; they stack, and they work with potions and bug

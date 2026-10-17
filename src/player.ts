@@ -4,6 +4,8 @@ import type { Combatant } from './combat';
 import { Status, soak, type PeeKind, type PotionState } from './combat';
 import type { Mount, Rider } from './mounts';
 
+export const REGEN_DELAY = 5;
+export const REGEN_RATE = 9; // hp per second
 export const PLAYER_HW = 0.3;
 export const PLAYER_H = 1.75;
 export const EYE = 1.6;
@@ -37,6 +39,11 @@ export class Player implements Rider {
   lastKind: PeeKind = 'normal';
   mount: Mount | null = null;
   armor = 0;
+  /** Seconds since last losing health; after a few quiet seconds health creeps back. */
+  sinceHurt = 99;
+  get regen(): boolean {
+    return this.alive && this.sinceHurt > REGEN_DELAY && this.hp < this.maxHp;
+  }
   mods = { double: 0, swirl: 0 };
   hitR2?: number;
   hitH?: number;
@@ -83,6 +90,7 @@ export class Player implements Rider {
       return;
     }
     this.hp -= soak(this, amount);
+    this.sinceHurt = 0;
     this.lastKind = kind;
     this.hurtFlash = Math.min(1, this.hurtFlash + 0.25);
     this.lastFrom = from;
@@ -93,6 +101,7 @@ export class Player implements Rider {
     if (!this.alive || this.protect > 0) return;
     if (this.mount) { this.mount.damage(amount, kind, from); return; }
     this.hp -= soak(this, amount);
+    this.sinceHurt = 0;
     this.lastKind = kind;
     this.hurtFlash = Math.max(this.hurtFlash, 0.12);
     this.lastFrom = from;
@@ -118,6 +127,7 @@ export class Player implements Rider {
     this.status.reset();
     this.potion = null;
     this.armor = 0;
+    this.sinceHurt = 99;
     this.mods.double = this.mods.swirl = 0;
     this.bladder = 100;
     this.protect = 2.5;
@@ -133,6 +143,8 @@ export class Player implements Rider {
     this.protect = Math.max(0, this.protect - dt);
     this.mods.double = Math.max(0, this.mods.double - dt);
     this.mods.swirl = Math.max(0, this.mods.swirl - dt);
+    this.sinceHurt += dt;
+    if (this.regen) this.hp = Math.min(this.maxHp, this.hp + REGEN_RATE * dt);
     if (this.alive) this.move(dt);
     else this.deathT += dt;
     this.shake = Math.max(0, this.shake - dt * 2);

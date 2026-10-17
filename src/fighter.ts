@@ -142,6 +142,7 @@ export class Fighter implements Rider {
   peeing = false;
   mount: Mount | null = null;
   armor = 0;
+  sinceHurt = 99;
   mods = { double: 0, swirl: 0 };
   hitR2?: number;
   hitH?: number;
@@ -202,6 +203,7 @@ export class Fighter implements Rider {
     this.weaponGoal = null;
     this.ammoSniper = this.ammoLauncher = this.jugs = 0;
     this.armor = 0;
+    this.sinceHurt = 99;
     this.mods.double = this.mods.swirl = 0;
     this.pos.copy(at);
     this.yaw = yaw;
@@ -250,6 +252,7 @@ export class Fighter implements Rider {
       return;
     }
     this.hp -= soak(this, amount);
+    this.sinceHurt = 0;
     if (this.hp <= 0) { this.die(kind, from); return; }
     Fighter.onHurt?.(this);
     Fighter.onSay?.(this, kind === 'fire' ? 'burn' : this.hp < 25 ? 'lowhp' : 'hit');
@@ -275,6 +278,7 @@ export class Fighter implements Rider {
     if (!this.alive || this.protect > 0) return;
     if (this.mount) { this.mount.damage(amount, kind, from); return; }
     this.hp -= soak(this, amount);
+    this.sinceHurt = 0;
     if (this.hp <= 0) this.die(kind, from);
   }
 
@@ -335,6 +339,8 @@ export class Fighter implements Rider {
     }
     this.mods.double = Math.max(0, this.mods.double - dt);
     this.mods.swirl = Math.max(0, this.mods.swirl - dt);
+    this.sinceHurt += dt;
+    if (this.sinceHurt > 5 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 9 * dt);
     this.bladder = Math.min(100, this.bladder + (this.peeing ? 0 : 9) * dt);
     this.speedNow = 0;
     if (this.status.frozen > 0) { // frozen solid
