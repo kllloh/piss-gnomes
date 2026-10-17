@@ -91,6 +91,7 @@ uniform float amp;
 uniform float pulse;
 uniform float tint;
 uniform float ink;
+uniform float thermal;
 uniform vec2 res;
 varying vec2 vUv;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -128,6 +129,15 @@ void main() {
   col *= 1.0 - r * r * (0.5 + 0.2 * amp);
   col += amp * pulse * 0.05 * vec3(1.0, 0.3, 0.8);
   col = max(col, 0.0);
+  if (thermal > 0.5) {
+    // thermal vision: the cold world is blue and purple, warm bodies (blown-out white) glow orange and yellow
+    float t = clamp(dot(col, vec3(0.299, 0.587, 0.114)) * 0.5, 0.0, 1.0);
+    vec3 h = mix(vec3(0.0, 0.0, 0.12), vec3(0.22, 0.0, 0.5), smoothstep(0.0, 0.2, t));
+    h = mix(h, vec3(0.85, 0.1, 0.4), smoothstep(0.2, 0.42, t));
+    h = mix(h, vec3(1.0, 0.6, 0.1), smoothstep(0.42, 0.7, t));
+    h = mix(h, vec3(1.0, 1.0, 0.75), smoothstep(0.7, 1.0, t));
+    col = h * h; // the rest of the pipeline expects linear colour
+  }
   if (ink > 0.0) {
     // --- PlayStation 2 look: low-res picture, a little bloom, saturated colour, 5-bit colour with an ordered dither ---
     vec2 px = 1.0 / res;
@@ -169,6 +179,13 @@ export class Trip {
     this._style = v;
     this.ink = v === 'hd' ? 0 : 1;
   }
+  /** Thermal vision on/off. */
+  set thermal(v: boolean) {
+    this.uniforms.thermal.value = v ? 1 : 0;
+  }
+  get thermal() {
+    return this.uniforms.thermal.value > 0.5;
+  }
   private _ink = 1;
   /** PlayStation 2 look, 0..1: 480p picture, dither, bloom. */
   get ink(): number {
@@ -190,6 +207,7 @@ export class Trip {
     pulse: { value: 0 },
     tint: { value: 0 },
     ink: { value: 1 },
+    thermal: { value: 0 },
     res: { value: new THREE.Vector2(1, 1) },
   };
   private sky: THREE.Mesh;

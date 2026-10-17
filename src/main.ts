@@ -5,6 +5,7 @@ import { buildDesert } from './desert';
 import { buildMushroom } from './mushroom';
 import { CLASSES, classOf } from './classes';
 import { initOperator } from './operator';
+import { Markers } from './markers';
 import { NavGrid } from './nav';
 import { Player } from './player';
 import { Fighter, type FightCtx } from './fighter';
@@ -21,7 +22,7 @@ import { Rory } from './rory';
 import { initTouch, isTouchDevice } from './touch';
 import { Streaks, REWARD_INFO, type Reward } from './streaks';
 import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, type PickupType, type BlastSpec } from './weapons';
-import { Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
+import { Mount, Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
 
 // --- rules --------------------------------------------------------------------------
@@ -177,6 +178,7 @@ const pickupSpots: { type: PickupType; pos: THREE.Vector3 }[] = [];
 const pickups = new WeaponPickups(scene, pickupSpots);
 
 // kill-streak rewards: turret, air strike, nuke
+const markers = new Markers(scene);
 const streaks = new Streaks(scene, world, grid, pee, fx, weapons, () => everyone);
 
 // Rory: big, blond, unkillable
@@ -356,7 +358,23 @@ let classId = 'trooper';
 try { const s = localStorage.getItem('pg-class'); if (s) classId = classOf(s).id; } catch { /* storage unavailable */ }
 
 /** Issue the chosen class kit: health, armour, speed, weapons, mods and a starting potion. */
+let thermalOn = false;
+function setThermal(on: boolean) {
+  thermalOn = on;
+  trip.thermal = on;
+  Fighter.thermal = on;
+  Mount.thermal = on;
+}
+function toggleThermal() {
+  if (!player.alive || !locked) return;
+  if (!classOf(classId).thermal) { banner('THERMAL VISION: SNIPER AND SCOUT ONLY', 1.6); return; }
+  setThermal(!thermalOn);
+  banner(thermalOn ? 'THERMAL VISION ON' : 'THERMAL VISION OFF', 1);
+  sound.uiClick();
+}
+
 function applyPlayerClass() {
+  setThermal(false);
   const c = classOf(classId);
   player.maxHp = c.hp;
   player.hp = c.hp;
@@ -837,10 +855,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Digit3') selectWeapon('launcher');
   if (e.code === 'KeyQ' && !e.repeat) cycleWeapon();
   if (e.code === 'KeyV' && !e.repeat && locked && player.alive) playerSay('shout', 2);
-  if (e.code === 'KeyT') {
-    trip.level = (trip.level + 2) % 3; // 2 -> 1 -> 0 -> 2
-    banner(['TRIP: OFF (BORING)', 'TRIP: MILD', 'TRIP: FULL SEND'][trip.level], 1.2);
-  }
+  if (e.code === 'KeyF' && !e.repeat) toggleThermal();
   if (e.code === 'KeyH') setGfx(GFX[(GFX.indexOf(trip.style) + 1) % GFX.length]);
   if (e.code === 'KeyN') {
     music.setEnabled(!music.on);
@@ -931,6 +946,7 @@ function renderLobby() {
   if (c.double) items.push(`Double Stream (${c.double}s)`);
   if (c.swirl) items.push(`Swirl Stream (${c.swirl}s)`);
   if (c.armor) items.push(`Armour ${c.armor}`);
+  if (c.thermal) items.push('Thermal Vision (press F)');
   $('cls-detail').innerHTML =
     `<div class="cname" style="color:${c.colour}">${c.name}</div><div class="ctag">${c.tag}</div><div class="cdesc">${c.desc}</div>` +
     bar('HEALTH', c.hp, 130, String(c.hp)) + bar('ARMOUR', c.armor, 60, String(c.armor)) + bar('SPEED', c.speed, 1.25, `${Math.round(c.speed * 100)}%`) +
@@ -1055,7 +1071,8 @@ function renderHud() {
   const nextAt = streak < 3 ? 3 : streak < 5 ? 5 : streak < 8 ? 8 : 0;
   elStreak.textContent = (rewards.length ? `READY: ${rewards.map((r) => REWARD_INFO[r].name).join(', ')} (R)   ` : '') + (streak > 0 ? `Streak ${streak}${nextAt ? ` → ${nextAt}` : ''}` : '');
   const wname = weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? `Piss Sniper ×${ammoSniper}` : `Piss Launcher ×${ammoLauncher}`;
-  elWeapon.textContent = `[${wname}]${jugs ? `  Jugs ×${jugs} (G)` : ''}${ammoSniper && weapon !== 'sniper' ? '  2: sniper' : ''}${ammoLauncher && weapon !== 'launcher' ? '  3: launcher' : ''}`;
+  const thermalTxt = thermalOn ? '  THERMAL ON (F)' : classOf(classId).thermal ? '  F: thermal' : '';
+  elWeapon.textContent = `[${wname}]${thermalTxt}${jugs ? `  Jugs ×${jugs} (G)` : ''}${ammoSniper && weapon !== 'sniper' ? '  2: sniper' : ''}${ammoLauncher && weapon !== 'launcher' ? '  3: launcher' : ''}`;
   if (player.mount) {
     const m = player.mount;
     elMount.style.display = 'block';
@@ -1311,6 +1328,7 @@ function simulate(dt: number) {
     deaths++;
     mounts.dismount(player);
     sound.cannon(false);
+    setThermal(false);
     resetWeapons();
     rewards.length = 0;
     registerKill(player, player.lastFrom, player.lastKind);
@@ -1362,7 +1380,9 @@ let fovNow = 75;
 
 function psychedelia(dt: number, vt: number, beat: number) {
   const kind: PeeKind = player.potion?.kind ?? 'normal';
-  const target = 0.55 + (player.potion ? 0.2 : 0) + (player.mount ? 0.12 : 0) + (firing ? 0.08 : 0) + (chaos ? 0.25 : 0) + player.hurtFlash * 0.25;
+  // the world melts more the more beaten up you are
+  const hurt = 1 - Math.max(0, Math.min(1, player.hp / player.maxHp));
+  const target = 0.1 + hurt * 0.8 + (player.potion ? 0.1 : 0) + (player.mount ? 0.05 : 0) + (chaos ? 0.12 : 0) + player.hurtFlash * 0.25;
   ampNow += (Math.min(1, target) - ampNow) * Math.min(1, dt * 2);
   tintNow += (TINTS[kind] - tintNow) * Math.min(1, dt * 1.5);
   const lvl = trip.level / 2;
@@ -1426,7 +1446,8 @@ function tick() {
   }
 
   sound.setListener(camera.position.x, camera.position.z, camera.rotation.y);
-  trip.render(scene, camera, vt, ampNow * (MAP === 'desert' ? 0.7 : 1), beat, tintNow);
+  markers.update(everyone, camera.position, vt, (c) => (c instanceof Fighter && c.mount ? c.mount.def.lift : 0) + (Fighter.size - 1) * 1.4, trip.ink > 0 ? 1 : renderer.domElement.height / 480);
+  trip.render(scene, camera, vt, ampNow * (thermalOn ? 0.2 : MAP === 'desert' ? 0.7 : 1), beat, tintNow);
 }
 
 if (touchMode) {
@@ -1441,6 +1462,7 @@ if (touchMode) {
     cycleWeapon,
     shout: () => { if (locked && player.alive) playerSay('shout', 2); },
     streak: useReward,
+    thermal: toggleThermal,
     pause: () => { fallback = false; setRunning(false); },
     status: () => ({
       weapon: weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? 'Piss Sniper' : 'Piss Launcher',
@@ -1449,6 +1471,8 @@ if (touchMode) {
       riding: !!player.mount,
       canRide: !!mounts.nearestFree(player.pos.x, player.pos.z, 3.6),
       running: locked,
+      hasThermal: !!classOf(classId).thermal,
+      thermalOn,
       reward: rewards.length ? (rewards[0] === 'turret' ? 'TURRET' : rewards[0] === 'airstrike' ? 'STRIKE' : 'NUKE') : '',
     }),
   });

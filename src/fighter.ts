@@ -124,6 +124,8 @@ export class Fighter implements Rider {
   static onHurt: ((f: Fighter) => void) | null = null;
   /** Something worth saying out loud happened to this fighter. */
   static onSay: ((f: Fighter, ctx: SayCtx) => void) | null = null;
+  /** Thermal vision is on: everybody glows white-hot. */
+  static thermal = false;
   /** Chaos events can make everybody huge. */
   static size = 1;
 
@@ -299,6 +301,7 @@ export class Fighter implements Rider {
 
   private die(kind: PeeKind, from: Combatant | null) {
     const c = Fighter.ctx!;
+    this.lite.mat.emissive.setHex(0); // corpses go cold
     this.alive = false;
     this.deadT = 0;
     this.peeing = false;
@@ -672,6 +675,12 @@ export class Fighter implements Rider {
   }
 
   private applyTint(t: number) {
+    if (Fighter.thermal) {
+      this.lite.mat.emissive.setHex(0xffffff);
+      this.lite.mat.emissiveIntensity = 2.5;
+      this.tinted = true;
+      return;
+    }
     const tint = this.status.tint(t);
     if (tint) {
       this.lite.mat.emissive.setHex(tint.color);

@@ -51,6 +51,8 @@ npm run build      # single self-contained dist/index.html you can double-click
   generative music engine that plays weird scales in odd time signatures. The scale changes with your potion.
 - **Rory:** a huge, blond, bowl-cut NPC (twice a gnome's size) who wanders the forest and cannot be killed. Get close and he says "Me Rory".
 - **Talking:** everyone never shuts up: gnomes shout when they spot you, get hit, burn, ride bugs (which have names), lose bugs, capture zones or just hallucinate. A deranged announcer commentates, and every minute or so a chaos event hits (moon gravity, rainbow rain, turbo pee, titan gnomes, bug stampede, disco speed). **V** shouts a battle cry.
+- **Enemy markers:** a red arrow floats above every enemy within 100 m, drawn on top of the scenery.
+- **Thermal vision (F):** Sniper Sprinkler and Dew Scout can switch it on: the cold world goes blue and purple, and every gnome and bug glows white-hot.
 - **Maps:** pick on the start screen (the page reloads with the new map). **The Enchanted Forest** is the original night
   forest. **Desert Trip** is a hot, bright, hallucinogenic desert: neon cacti, striped mesas, an oasis, giant bones, a
   spinning sun over the Sun Temple, floating mirage orbs and a swirling day sky. Same zones, bugs, weapons and bots.
@@ -65,10 +67,10 @@ npm run build      # single self-contained dist/index.html you can double-click
   with your class prop, loadout stats, match info, a squad list and a big DEPLOY button (or press Enter).
 - **Graphics options** (start screen, or **H**): **PS2** (below) and plain **HD**.
 - **Art:** blocky PlayStation 2 style: hard-edged low-poly shapes, chunky low-res textures, a 480p picture with dithered 5-bit colour, bloom and interlace lines, on top of the psychedelic sky and warping. Neon 80s UI. **H** switches between PS2 and HD.
-- **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. **T** cycles full / mild / off.
+- **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. The warp and colour-melt get stronger the more damage you take, and settle as your health regenerates.
 - **Phones and tablets:** touch controls appear automatically: a floating move stick on the left, drag anywhere else to look, a big PEE/FIRE button (drag it to aim while firing), plus JUMP, JUG, SWAP, RIDE, ZOOM (with the sniper), YELL and pause. Play in landscape; the first tap goes fullscreen where the browser allows it.
 - **Controls:** WASD move, Space jump, Shift walk, mouse aim, hold click to pee, E ride / hop off, Esc pause,
-  M voices, N music, T trip level, G jug, 1/2/3/Q weapons.
+  M voices, N music, F thermal vision, G jug, 1/2/3/Q weapons.
 
 ## Code map
 

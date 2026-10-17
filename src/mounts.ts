@@ -38,6 +38,8 @@ const boxGeo = new SoftBox(1, 1, 1);
 
 /** A giant bug with a pee cannon on its back. */
 export class Mount {
+  /** Thermal vision is on: bugs run hot too. */
+  static thermal = false;
   readonly group = new THREE.Group();
   readonly pos = new THREE.Vector3();
   readonly home = new THREE.Vector3();
@@ -193,6 +195,8 @@ export class Mount {
     this.group.position.set(this.pos.x, this.pos.y + Math.abs(Math.sin(this.phase * 0.5)) * 0.06 * amp, this.pos.z);
     this.group.rotation.y = this.yaw;
     // the shell slowly shimmers through the rainbow; a hit flashes it white
+    this.bodyMat.emissive.setHex(Mount.thermal ? 0xffffff : 0);
+    this.bodyMat.emissiveIntensity = Mount.thermal ? 2.5 : 1;
     if (this.flash > 0) {
       this.flash -= dt;
       this.bodyMat.color.setRGB(2, 2, 2);
