@@ -26,8 +26,18 @@ const KEY_JUMPS = [0, 5, 7, 6, -2, 3, 10, -5];
 
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
+export type MusicStyle = 'trip' | 'acid' | 'stoner';
+
 export class Music {
   on = true;
+  private style: MusicStyle = 'trip';
+  private echo: DelayNode | null = null;
+  private droneOut: GainNode | null = null;
+  private fuzz: WaveShaperNode | null = null;
+  private squelch: WaveShaperNode | null = null;
+  private acidPat: { on: boolean; n: number; acc: boolean; slide: boolean }[] = [];
+  private lastAcid = 0;
+  private riff: { s: number; n: number; len: number }[] = [];
   private ctx: AudioContext | null = null;
   private out!: GainNode; // master
   private inst!: GainNode; // instruments before the echo
@@ -69,6 +79,7 @@ export class Music {
     // feedback echo with a dark loop
     const delay = ctx.createDelay(2);
     delay.delayTime.value = 0.42;
+    this.echo = delay;
     const fb = ctx.createGain();
     fb.gain.value = 0.48;
     const dark = ctx.createBiquadFilter();
@@ -87,9 +98,59 @@ export class Music {
     wob.connect(wg).connect(delay.delayTime);
     wob.start();
 
+    const curve = (k: number) => {
+      const c = new Float32Array(2048);
+      for (let i = 0; i < c.length; i++) {
+        const x = (i / (c.length - 1)) * 2 - 1;
+        c[i] = Math.tanh(x * k);
+      }
+      return c;
+    };
+    this.fuzz = ctx.createWaveShaper();
+    this.fuzz.curve = curve(40);
+    this.fuzz.oversample = '2x';
+    this.squelch = ctx.createWaveShaper();
+    this.squelch.curve = curve(4);
     this.startDrone();
+    this.applyStyle();
     this.nextTime = ctx.currentTime + 0.15;
     this.timer = window.setInterval(() => this.schedule(), 60);
+  }
+
+  /** Pick the soundtrack: the weird jam (forest), acid techno (mushrooms) or stoner metal (desert). */
+  setStyle(s: MusicStyle) {
+    this.style = s;
+    this.step = 0;
+    this.barCount = 0;
+    this.regen();
+    this.applyStyle();
+  }
+
+  private applyStyle() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.droneOut?.gain.setTargetAtTime(this.style === 'trip' ? 0.07 : 0, t, 0.3);
+    this.echo?.delayTime.setTargetAtTime(this.style === 'acid' ? 0.336 : this.style === 'stoner' ? 0.625 : 0.42, t, 0.1);
+  }
+
+  /** New bassline / riff every four bars. */
+  private regen() {
+    if (this.style === 'acid') {
+      const sc = [0, 0, 3, 5, 7, 10, 12, 15];
+      this.acidPat = Array.from({ length: 16 }, (_, i) => ({
+        on: Math.random() > (i % 4 === 0 ? 0.1 : 0.3),
+        n: sc[Math.floor(Math.random() * sc.length)] + (Math.random() < 0.2 ? 12 : 0),
+        acc: Math.random() < 0.28,
+        slide: Math.random() < 0.25,
+      }));
+    } else if (this.style === 'stoner') {
+      const rhythms = [[0, 3, 6, 8, 11, 14], [0, 4, 6, 10, 12, 14], [0, 2, 3, 8, 10, 11], [0, 6, 8, 14], [0, 3, 8, 11]];
+      const rh = rhythms[Math.floor(Math.random() * rhythms.length)];
+      const notes = [0, 0, 0, 0, 3, 5, 6, 7, 10];
+      this.riff = rh.map((s, i) => ({ s, n: notes[Math.floor(Math.random() * notes.length)], len: Math.max(1, (rh[i + 1] ?? 16) - s) }));
+      this.riff[0].n = 0;
+    }
   }
 
   setEnabled(on: boolean) {
@@ -133,6 +194,7 @@ export class Music {
     lfo.connect(lg).connect(f.frequency);
     const g = ctx.createGain();
     g.gain.value = 0.07;
+    this.droneOut = g;
     a.connect(f);
     b.connect(f);
     c.connect(g);
@@ -161,6 +223,19 @@ export class Music {
     // if the tab was asleep, don't try to play catch-up
     if (this.nextTime < ctx.currentTime - 0.3) this.nextTime = ctx.currentTime + 0.05;
     while (this.nextTime < ctx.currentTime + 0.25) {
+      if (this.style !== 'trip') {
+        const bpm = this.style === 'acid' ? 134 + this.intensity * 6 : 70 + this.intensity * 5;
+        if (this.style === 'acid') this.acidStep(this.nextTime);
+        else this.stonerStep(this.nextTime);
+        this.nextTime += 15 / bpm; // a sixteenth note
+        this.step++;
+        if (this.step >= 16) {
+          this.step = 0;
+          this.barCount++;
+          if (this.barCount % 4 === 0) this.regen();
+        }
+        continue;
+      }
       this.playStep(this.nextTime);
       const tempo = 108 + Math.sin(this.barCount * 0.37) * 14 + this.intensity * 26; // wobbling tempo
       const eighth = 30 / tempo;
@@ -388,6 +463,300 @@ export class Music {
     g.gain.setValueAtTime(0.22, t + dur * 0.7);
     g.gain.linearRampToValueAtTime(0.0001, t + dur);
     o.connect(bp).connect(g).connect(this.inst);
+    o.start(t);
+    vib.start(t);
+    o.stop(t + dur + 0.05);
+    vib.stop(t + dur + 0.05);
+  }
+
+  // ======================================================================================
+  //  ACID TECHNO (Mushroom Hollow): 134 BPM, four on the floor, a squelching 303 bassline
+  // ======================================================================================
+
+  private acidStep(t: number) {
+    const s = this.step;
+    const bar = this.barCount;
+    const breakdown = bar % 16 >= 14; // two bars without the kick, then it comes back in
+    if (s % 4 === 0 && !breakdown) {
+      this.kick(t, 1.15);
+      if (s === 0) this.lastKick = t;
+    }
+    if (s % 4 === 2) this.ohat(t, 0.9);
+    else if (Math.random() < 0.65 + this.intensity * 0.3) this.hat(t, s % 2 ? 0.45 : 0.25);
+    if ((s === 4 || s === 12) && !breakdown) this.clap(t);
+    const p = this.acidPat[s];
+    if (p?.on) this.acid303(t, 40 + p.n, p.acc, p.slide);
+    if (bar % 8 >= 4 && s % 2 === 0 && Math.random() < 0.75) this.arp(t, 64 + [0, 3, 7, 10, 12, 15][Math.floor(Math.random() * 6)] + (s % 8 === 0 ? 12 : 0));
+    if (s === 0 && bar % 16 === 14) this.swell(t, 32 * (15 / 134));
+    if (s === 0 && bar % 4 === 0 && Math.random() < 0.3) this.blorp(t);
+  }
+
+  private acid303(t: number, midi: number, accent: boolean, slide: boolean) {
+    const ctx = this.ctx!;
+    const f = mtof(midi);
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    if (slide && this.lastAcid) {
+      o.frequency.setValueAtTime(this.lastAcid, t);
+      o.frequency.linearRampToValueAtTime(f, t + 0.05);
+    } else {
+      o.frequency.setValueAtTime(f, t);
+    }
+    this.lastAcid = f;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 15;
+    const base = 450 + 1700 * (0.5 + 0.5 * Math.sin(this.barCount * 0.5 + this.step * 0.07)); // the filter wobbles over the bars
+    lp.frequency.setValueAtTime(base * (accent ? 3.2 : 1.8), t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(120, base * 0.35), t + 0.17);
+    const g = ctx.createGain();
+    this.env(g, t, accent ? 0.42 : 0.3, 0.004, 0.14);
+    o.connect(lp);
+    if (this.squelch) lp.connect(this.squelch).connect(g);
+    else lp.connect(g);
+    g.connect(this.out);
+    o.start(t);
+    o.stop(t + 0.22);
+  }
+
+  private ohat(t: number, v: number) {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = 6500;
+    const g = ctx.createGain();
+    this.env(g, t, 0.2 * v, 0.003, 0.12);
+    src.connect(f).connect(g).connect(this.out);
+    src.start(t);
+    src.stop(t + 0.18);
+  }
+
+  private clap(t: number) {
+    const ctx = this.ctx!;
+    for (const d of [0, 0.011, 0.023]) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 1400;
+      f.Q.value = 1.2;
+      const g = ctx.createGain();
+      this.env(g, t + d, d === 0.023 ? 0.4 : 0.25, 0.002, d === 0.023 ? 0.16 : 0.03);
+      src.connect(f).connect(g).connect(this.inst);
+      src.start(t + d);
+      src.stop(t + d + 0.2);
+    }
+  }
+
+  private arp(t: number, midi: number) {
+    const ctx = this.ctx!;
+    const o = ctx.createOscillator();
+    o.type = 'square';
+    o.frequency.value = mtof(midi);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3500, t);
+    lp.frequency.exponentialRampToValueAtTime(700, t + 0.12);
+    const g = ctx.createGain();
+    this.env(g, t, 0.1, 0.003, 0.11);
+    const pn = ctx.createStereoPanner();
+    pn.pan.value = Math.random() * 1.4 - 0.7;
+    o.connect(lp).connect(g).connect(pn).connect(this.inst);
+    o.start(t);
+    o.stop(t + 0.17);
+  }
+
+  // ======================================================================================
+  //  STONER METAL (Desert Trip): 70 BPM, fuzzed-out drop-D riffs, huge drums, a wailing solo
+  // ======================================================================================
+
+  private stonerStep(t: number) {
+    const s = this.step;
+    const bar = this.barCount;
+    const b4 = bar % 4;
+    const step = 15 / (70 + this.intensity * 5);
+    // drums: a lumbering half-time groove
+    if (s === 0 || s === 6 || s === 10) {
+      this.heavyKick(t);
+      if (s === 0) this.lastKick = t;
+    }
+    if (s === 8) this.bigSnare(t);
+    if (s % 4 === 0 && !(b4 === 3 && s >= 12)) this.ride(t, s === 0 ? 1 : 0.6);
+    if (s === 0 && b4 === 0) this.crash(t);
+    if (b4 === 3 && s >= 12) this.tom(t, 190 - (s - 12) * 28); // a tom fill into the next riff
+    // the riff: fuzzed power chords with the bass doubling underneath
+    const r = this.riff.find((x) => x.s === s);
+    if (r) {
+      this.fuzzChord(t, 38 + r.n, r.len * step * 0.95);
+      this.bassNote(t, 26 + r.n, r.len * step * 0.95);
+    }
+    // a slow wailing solo over the top every eight bars
+    if (bar % 8 >= 6 && s % 8 === 0) this.wail(t, 62 + [0, 3, 5, 7, 10, 12, 15][Math.floor(Math.random() * 7)], step * 7);
+  }
+
+  private fuzzChord(t: number, midi: number, dur: number) {
+    const ctx = this.ctx!;
+    const mix = ctx.createGain();
+    for (const [semi, type, det] of [[0, 'sawtooth', 0], [7, 'sawtooth', 5], [12, 'square', -6]] as const) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = mtof(midi + semi);
+      o.detune.value = det;
+      o.connect(mix);
+      o.start(t);
+      o.stop(t + dur + 0.12);
+    }
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3200, t);
+    lp.frequency.exponentialRampToValueAtTime(1500, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
+    g.gain.setValueAtTime(0.2, t + Math.max(0.02, dur * 0.8));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.1);
+    mix.gain.value = 0.5;
+    if (this.fuzz) mix.connect(this.fuzz).connect(lp);
+    else mix.connect(lp);
+    lp.connect(g).connect(this.out);
+    // a whisper of echo so the riff rings in the desert
+    const send = ctx.createGain();
+    send.gain.value = 0.25;
+    g.connect(send).connect(this.inst);
+  }
+
+  private bassNote(t: number, midi: number, dur: number) {
+    const ctx = this.ctx!;
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = mtof(midi);
+    const o2 = ctx.createOscillator();
+    o2.type = 'sawtooth';
+    o2.frequency.value = mtof(midi);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 420;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.42, t + 0.012);
+    g.gain.setValueAtTime(0.42, t + Math.max(0.02, dur * 0.85));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+    o.connect(lp);
+    o2.connect(lp);
+    lp.connect(g).connect(this.out);
+    o.start(t);
+    o2.start(t);
+    o.stop(t + dur + 0.1);
+    o2.stop(t + dur + 0.1);
+  }
+
+  private heavyKick(t: number) {
+    const ctx = this.ctx!;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(130, t);
+    o.frequency.exponentialRampToValueAtTime(36, t + 0.16);
+    const g = ctx.createGain();
+    this.env(g, t, 1.0, 0.004, 0.5);
+    o.connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + 0.6);
+  }
+
+  private bigSnare(t: number) {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 1900;
+    f.Q.value = 0.8;
+    const g = ctx.createGain();
+    this.env(g, t, 0.55, 0.002, 0.3);
+    src.connect(f).connect(g).connect(this.out);
+    src.start(t);
+    src.stop(t + 0.35);
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(220, t);
+    o.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+    const g2 = ctx.createGain();
+    this.env(g2, t, 0.5, 0.002, 0.2);
+    o.connect(g2).connect(this.out);
+    o.start(t);
+    o.stop(t + 0.25);
+  }
+
+  private ride(t: number, v: number) {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = 7500;
+    const g = ctx.createGain();
+    this.env(g, t, 0.13 * v, 0.002, 0.3);
+    src.connect(f).connect(g).connect(this.out);
+    src.start(t);
+    src.stop(t + 0.35);
+  }
+
+  private crash(t: number) {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = 4200;
+    const g = ctx.createGain();
+    this.env(g, t, 0.3, 0.003, 1.8);
+    src.connect(f).connect(g).connect(this.out);
+    src.start(t);
+    src.stop(t + 2);
+  }
+
+  private tom(t: number, f0: number) {
+    const ctx = this.ctx!;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(Math.max(70, f0), t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(50, f0 * 0.6), t + 0.2);
+    const g = ctx.createGain();
+    this.env(g, t, 0.7, 0.003, 0.24);
+    o.connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + 0.3);
+  }
+
+  /** A slow, vibrato-heavy fuzz guitar lead that bends up into each note. */
+  private wail(t: number, midi: number, dur: number) {
+    const ctx = this.ctx!;
+    const f = mtof(midi);
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f * 0.89, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + 0.25);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 5.2;
+    const vg = ctx.createGain();
+    vg.gain.setValueAtTime(0, t);
+    vg.gain.linearRampToValueAtTime(f * 0.025, t + dur * 0.6);
+    vib.connect(vg).connect(o.frequency);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2600;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.16, t + 0.05);
+    g.gain.setValueAtTime(0.16, t + dur * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    if (this.fuzz) o.connect(this.fuzz).connect(lp);
+    else o.connect(lp);
+    lp.connect(g).connect(this.out);
+    const send = ctx.createGain();
+    send.gain.value = 0.5;
+    g.connect(send).connect(this.inst);
     o.start(t);
     vib.start(t);
     o.stop(t + dur + 0.05);

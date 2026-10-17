@@ -107,6 +107,7 @@ const potions = new Potions(scene, forest.potionSpots);
 const music = new Music(() => sound.context);
 const trip = new Trip(renderer, scene);
 trip.theme = MAP;
+music.setStyle(MAP === 'mush' ? 'acid' : MAP === 'desert' ? 'stoner' : 'trip');
 if (MAP === 'desert') { // hot and bright
   hemi.intensity = 2.1;
   moon.intensity = 2.4;
@@ -800,8 +801,8 @@ renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0) f
 window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) zooming = false; });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousemove', (e) => { if (locked) player.look(e.movementX, e.movementY); });
-const GFX = ['ps2', 'hd'] as const;
-const GFX_NAMES = { ps2: 'PLAYSTATION 2', hd: 'HD' };
+const GFX = ['ps2', 'toon', 'hd'] as const;
+const GFX_NAMES = { ps2: 'PLAYSTATION 2', toon: 'CARTOON', hd: 'HD' };
 function refreshOptions() {
   for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card')) {
     el.classList.toggle('selected', el.dataset.g ? el.dataset.g === trip.style : el.dataset.m === MAP);
@@ -827,9 +828,9 @@ for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card'))
 }
 {
   let g: (typeof GFX)[number] = 'ps2';
-  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'hd') g = s; } catch { /* ignore */ }
+  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'toon' || s === 'hd') g = s; } catch { /* ignore */ }
   const q = new URLSearchParams(location.search).get('gfx');
-  if (q === 'ps2' || q === 'hd') g = q;
+  if (q === 'ps2' || q === 'toon' || q === 'hd') g = q;
   setGfx(g, false);
 }
 

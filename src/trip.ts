@@ -92,6 +92,7 @@ uniform float pulse;
 uniform float tint;
 uniform float ink;
 uniform float thermal;
+uniform float toon;
 uniform vec2 res;
 varying vec2 vUv;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -138,6 +139,24 @@ void main() {
     h = mix(h, vec3(1.0, 1.0, 0.75), smoothstep(0.7, 1.0, t));
     col = h * h; // the rest of the pipeline expects linear colour
   }
+  if (toon > 0.5) {
+    // CARTOON: bold clean ink lines, flat bands of colour and a comic-book halftone in the shadows
+    vec2 px = 1.6 / res;
+    vec3 cl = sqrt(max(texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb, 0.0));
+    vec3 cr = sqrt(max(texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb, 0.0));
+    vec3 cu = sqrt(max(texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb, 0.0));
+    vec3 cd = sqrt(max(texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb, 0.0));
+    float edge = smoothstep(0.34, 0.5, max(length(cr - cl), length(cu - cd)));
+    vec3 pc = sqrt(col);
+    float lm = dot(pc, vec3(0.299, 0.587, 0.114));
+    pc = mix(vec3(lm), pc, 1.35);
+    pc = floor(pc * 5.0 + 0.5) / 5.0;
+    vec2 hp = mod(gl_FragCoord.xy, 7.0) - 3.5;
+    float dots = step(length(hp), (0.45 - lm) * 9.0);
+    pc *= 1.0 - 0.35 * dots * step(lm, 0.45);
+    pc = mix(pc, vec3(0.03, 0.02, 0.06), edge);
+    col = pc * pc;
+  }
   if (ink > 0.0) {
     // --- PlayStation 2 look: low-res picture, a little bloom, saturated colour, 5-bit colour with an ordered dither ---
     vec2 px = 1.0 / res;
@@ -163,7 +182,7 @@ export class Trip {
   /** 0 = off, 1 = mild, 2 = full. */
   level = 2;
   private _theme: 'forest' | 'desert' | 'mush' = 'forest';
-  private _style: 'ps2' | 'hd' = 'ps2';
+  private _style: 'ps2' | 'toon' | 'hd' = 'ps2';
   get theme() {
     return this._theme;
   }
@@ -174,10 +193,11 @@ export class Trip {
   get style() {
     return this._style;
   }
-  /** The graphics option: PlayStation 2 or plain HD. */
-  set style(v: 'ps2' | 'hd') {
+  /** The graphics option: PlayStation 2, Cartoon, or plain HD. */
+  set style(v: 'ps2' | 'toon' | 'hd') {
     this._style = v;
-    this.ink = v === 'hd' ? 0 : 1;
+    this.uniforms.toon.value = v === 'toon' ? 1 : 0;
+    this.ink = v === 'ps2' ? 1 : 0;
   }
   /** Thermal vision on/off. */
   set thermal(v: boolean) {
@@ -208,6 +228,7 @@ export class Trip {
     tint: { value: 0 },
     ink: { value: 1 },
     thermal: { value: 0 },
+    toon: { value: 0 },
     res: { value: new THREE.Vector2(1, 1) },
   };
   private sky: THREE.Mesh;

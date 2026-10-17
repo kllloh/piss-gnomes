@@ -66,7 +66,8 @@ npm run build      # single self-contained dist/index.html you can double-click
   faster.
 - **Lobby:** the start screen is now a Call-of-Duty-style lobby: tabs (PLAY / LOADOUT / INTEL), a 3D gnome on a turntable
   with your class prop, loadout stats, match info, a squad list and a big DEPLOY button (or press Enter).
-- **Graphics options** (start screen, or **H**): **PS2** (below) and plain **HD**.
+- **Graphics options** (start screen, or **H**): **PS2** (below), **Cartoon** (a Saturday-morning cartoon look: thick clean ink outlines, flat colour bands, comic-book halftone dots in the shadows, at full resolution) and plain **HD**.
+- **Soundtracks:** Mushroom Hollow plays generative **acid techno** (134 BPM, four-on-the-floor, a squelching 303 bassline with accents and slides, claps, off-beat hats, arps and breakdowns). Desert Trip plays **stoner metal** (70 BPM, fuzzed drop-D power-chord riffs, a lumbering half-time groove, tom fills, crashes and a wailing solo). The forest keeps the weird jam. All of it is made live with Web Audio.
 - **Art:** blocky PlayStation 2 style: hard-edged low-poly shapes, chunky low-res textures, a 480p picture with dithered 5-bit colour, bloom and interlace lines, on top of the psychedelic sky and warping. Neon 80s UI. **H** switches between PS2 and HD.
 - **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. The warp and colour-melt get stronger the more damage you take, and settle as your health regenerates.
 - **Phones and tablets:** touch controls appear automatically: a floating move stick on the left, drag anywhere else to look, a big PEE/FIRE button (drag it to aim while firing), plus JUMP, JUG, SWAP, RIDE, ZOOM (with the sniper), YELL and pause. Play in landscape; the first tap goes fullscreen where the browser allows it.
