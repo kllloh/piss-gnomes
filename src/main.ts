@@ -21,6 +21,8 @@ import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } f
 import { Rory } from './rory';
 import { Chris } from './chris';
 import { Derek } from './derek';
+import { Moss } from './moss';
+import { AuntyAli } from './aunty';
 import { initTouch, isTouchDevice } from './touch';
 import { Streaks, REWARD_INFO, type Reward } from './streaks';
 import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, makeJug, type PickupType, type BlastSpec } from './weapons';
@@ -83,7 +85,7 @@ moon.shadow.bias = -0.0006;
 moon.shadow.normalBias = 0.05;
 scene.add(moon, moon.target);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 320);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 450);
 scene.add(camera);
 
 // --- game objects ----------------------------------------------------------------------
@@ -190,6 +192,40 @@ function derekArrives() {
   sound.horn(false);
 }
 
+// Moss the giant cat (end game only) and Aunty Ali (who has no effect on anything at all)
+const moss = new Moss(scene, fx);
+moss.pickTarget = () => {
+  const live = everyone.filter((c) => c.alive && !c.isNpc && !(c.isPlayer && player.god));
+  if (!live.length) return null;
+  const c = player.alive && !player.god && Math.random() < 0.3 ? player : live[Math.floor(Math.random() * live.length)];
+  return { x: c.pos.x + (Math.random() - 0.5) * 3, z: c.pos.z + (Math.random() - 0.5) * 3 };
+};
+moss.onStrike = (x, z) => {
+  const sp = sound.spatial(x, z);
+  sound.laser(Math.max(sp.vol, 0.35), sp.pan);
+  grid.query(x, z, moss.radius, blastBuf);
+  for (const c of blastBuf.slice()) {
+    if (!c.alive || c.isNpc) continue;
+    c.hurt(99999, 'shock', moss);
+    if (c.alive) c.hurt(99999, 'shock', moss); // a rider survives the bug going first
+  }
+  for (const pl of forest.plants) if (pl.alive && Math.hypot(pl.x - x, pl.z - z) < moss.radius + 1) pl.mow();
+  for (const m of mounts.list) if (m.alive && !m.rider && Math.hypot(m.pos.x - x, m.pos.z - z) < moss.radius + 1) m.damage(9999, 'shock', moss);
+  const dp = Math.hypot(x - player.pos.x, z - player.pos.z);
+  if (dp < 60) player.shake = Math.max(player.shake, 1 - dp / 60);
+};
+moss.onArrive = () => {
+  banner('MOSS THE CAT HAS ARRIVED. HE IS NOT HAPPY.', 4);
+  announcer('moss');
+  sound.meow(1, 0, 0.22);
+  sound.boom(1, 0);
+};
+const aunty = new AuntyAli(scene, fx);
+aunty.onSay = (text) => {
+  const sp = sound.spatial(aunty.pos.x, aunty.pos.z, 8);
+  sound.taunt(text, Math.max(sp.vol, 0.4), sp.pan, 1.5, 'gnome', 11, 1, 'Aunty Ali');
+};
+
 /** Rory and Chris start each match somewhere out in the forest, well away from both bases. */
 function placeNpcs() {
   let at: THREE.Vector3 | null = null;
@@ -202,6 +238,8 @@ function placeNpcs() {
   let cat = new THREE.Vector3(at.x + 7, 0, at.z + 6);
   for (let k = 0; k < 12 && !nav.isFreeAt(cat.x, cat.z); k++) cat = new THREE.Vector3(at.x + (Math.random() - 0.5) * 18, 0, at.z + (Math.random() - 0.5) * 18);
   chris.spawn(cat);
+  const q = nav.randomFreePoint(HALF - 20); // Aunty Ali wanders in from somewhere else
+  aunty.spawn(q.x, q.z);
 }
 
 // weapons: thrown jugs, launched pee-balls, sniper beams, and crates of them to find
@@ -616,6 +654,10 @@ function updateMode(dt: number) {
   player.speedMul = classOf(classId).speed * (carrying ? 0.85 : 1);
   if (phase !== 'play') return;
 
+  // the end game: Moss rises over the horizon
+  const endgame = mode === 'zones' ? Math.min(tickets[0], tickets[1]) <= 100 : mode === 'extract' ? delivered >= 2 || extractT <= 240 : br.idx >= 3;
+  if (endgame && !moss.active) moss.arrive();
+
   if (mode === 'extract') {
     extractT -= dt;
     for (const j of goldJugs) {
@@ -718,6 +760,7 @@ function newMatch() {
   phase = 'play';
   placeNpcs();
   derek.reset();
+  moss.reset();
   derekIn = 30 + Math.random() * 90;
   endChaos();
   resetWeapons();
@@ -848,7 +891,7 @@ const killVerbBy = (k: PeeKind) => PEE[k].verb;
 function registerKill(victim: Combatant, from: Combatant | null, kind: PeeKind) {
   tickets[victim.team] = Math.max(0, tickets[victim.team] - 1);
   const killer = from?.name ?? 'The forest';
-  feedPush(`${killer} ${from === derek ? 'mowed down' : killVerbBy(kind)} ${victim.name}`, victim.team === 1 ? '#a8f0a8' : '#ffa0a0');
+  feedPush(`${killer} ${from === derek ? 'mowed down' : from === moss ? 'vaporised' : killVerbBy(kind)} ${victim.name}`, victim.team === 1 ? '#a8f0a8' : '#ffa0a0');
   const credit = (from as { owner?: Combatant } | null)?.owner ?? from; // a turret's kills are its owner's
   if (from === derek && Math.random() < 0.25) derek.sayMow();
   if (credit?.isPlayer) {
@@ -1505,6 +1548,10 @@ function renderHud() {
     miniCtx.fillRect(mx(derek.pos.x) - 5, mz(derek.pos.z) - 5, 10, 10);
     miniCtx.strokeRect(mx(derek.pos.x) - 5, mz(derek.pos.z) - 5, 10, 10);
   }
+  miniCtx.fillStyle = '#d070ff';
+  miniCtx.beginPath();
+  miniCtx.arc(mx(aunty.pos.x), mz(aunty.pos.z), 4, 0, Math.PI * 2);
+  miniCtx.fill();
   miniCtx.fillStyle = '#111';
   miniCtx.strokeStyle = '#7dff9a';
   miniCtx.lineWidth = 1.5;
@@ -1564,7 +1611,7 @@ function adaptQuality(dt: number) {
       renderer.setPixelRatio(1);
       renderer.setSize(innerWidth, innerHeight);
       trip.resize();
-      camera.far = 130;
+      camera.far = 450; // far enough to still see Moss
       camera.updateProjectionMatrix();
       fog.far = 110;
     }
@@ -1695,6 +1742,8 @@ function simulate(dt: number) {
   }
   mowCrunch = Math.max(0, mowCrunch - dt);
   derek.update(dt, grid);
+  moss.update(dt);
+  aunty.update(dt, player.pos.x, player.pos.z);
   if (derek.alive) {
     const sp = sound.spatial(derek.pos.x, derek.pos.z, 4);
     sound.mower(Math.min(1, sp.vol * 1.7), sp.pan);
@@ -1754,6 +1803,7 @@ function simulate(dt: number) {
     registerKill(player, player.lastFrom, player.lastKind);
     respawnT = PLAYER_RESPAWN;
     if (player.lastFrom === derek) banner('MOWED DOWN BY DEREK', 2.4);
+    else if (player.lastFrom === moss) banner('VAPORISED BY MOSS', 2.4);
     else banner(pick(['YOU WERE DRENCHED', 'WELL, THAT STINGS', 'RIP. THE FOREST IS UNIMPRESSED', 'SPLOOSH. YOU ARE DONE']), 2.2);
   }
   playerWasAlive = player.alive;
@@ -1911,7 +1961,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, getMode: () => mode, setMode: (m: Mode) => { mode = m; newMatch(); }, br, goldJugs, extractPad, derek, chris, placeNpcs, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
+  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, moss, aunty, getMode: () => mode, setMode: (m: Mode) => { mode = m; newMatch(); }, br, goldJugs, extractPad, derek, chris, placeNpcs, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   applyPlayerClass, setClass: (id: string) => { classId = id; applyPlayerClass(); renderLobby(); }, get classId() { return classId; },

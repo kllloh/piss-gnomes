@@ -769,16 +769,16 @@ export class Sound {
   }
 
   /** A big cat's meow: a rising and falling wail. */
-  meow(vol: number, pan: number) {
+  meow(vol: number, pan: number, pitch = 1) {
     if (!this.ctx || vol < 0.05) return;
     const t = this.ctx.currentTime;
     const o = this.out(0.3 * vol, pan);
     if (!o) return;
     const osc = this.ctx.createOscillator();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(420, t);
-    osc.frequency.linearRampToValueAtTime(820, t + 0.18);
-    osc.frequency.linearRampToValueAtTime(560, t + 0.55);
+    osc.frequency.setValueAtTime(420 * pitch, t);
+    osc.frequency.linearRampToValueAtTime(820 * pitch, t + 0.18 * (1 / Math.sqrt(pitch)));
+    osc.frequency.linearRampToValueAtTime(560 * pitch, t + 0.55 * (1 / Math.sqrt(pitch)));
     const f = this.ctx.createBiquadFilter();
     f.type = 'bandpass';
     f.frequency.setValueAtTime(900, t);
@@ -860,6 +860,15 @@ export class Sound {
       this.jetNodes = null;
       setTimeout(() => { try { n.src.stop(); } catch { /* already stopped */ } }, 400);
     }
+  }
+
+  /** Moss's eye laser: a rising whine, a crack and a thump. */
+  laser(vol: number, pan: number) {
+    if (vol < 0.05) return;
+    this.tone(0.25 * vol, 2400, 160, 0.5, 'sawtooth', pan);
+    this.tone(0.18 * vol, 1200, 80, 0.5, 'square', pan, 0.02);
+    this.burst(0.5 * vol, 6000, 0.25, pan);
+    this.tone(0.5 * vol, 90, 30, 0.45, 'sine', pan, 0.05);
   }
 
   ignite() {

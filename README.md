@@ -69,6 +69,14 @@ npm run build      # single self-contained dist/index.html you can double-click
     only their class stats; loot crates do not come back. A **storm** (the magenta wall) closes in on a shrinking safe
     circle in six phases and does more damage each phase; the minimap shows the circle and, during the pause between
     shrinks, the next one. Last team standing wins; if you die, the match ends for you after a few seconds.
+- **Moss the Cat (end game only):** when a match reaches its end game (a team down to 100 tickets in Capture the Zones, the
+  last 4 minutes or two jugs home in Extraction, the fourth storm phase in Battle Royale), a massive tuxedo cat rises over
+  the northern horizon, about 190 m tall, and starts firing **lasers out of his eyes**. Each laser is telegraphed by a red
+  circle on the ground and a red aiming line for 1.5 seconds, then vaporises everything within 4.5 m (and the plants and any
+  loose bugs). He picks random fighters, and you now and then. He leaves when the match ends.
+- **Aunty Ali:** an old woman with brown hair in a bun and a broom, as big as Derek, who wanders the forest sweeping up and
+  telling the gnomes to stop fighting and clean up their mess. She has **no effect on anything**: pee goes through her
+  and the bots ignore her. She shows as a purple dot on the minimap.
 - **Maps:** pick on the start screen (the page reloads with the new map). **The Enchanted Forest** is the original night
   forest. **Desert Trip** is a hot, bright, hallucinogenic desert: neon cacti, striped mesas, an oasis, giant bones, a
   spinning sun over the Sun Temple, floating mirage orbs and a swirling day sky. Same zones, bugs, weapons and bots.
