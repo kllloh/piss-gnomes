@@ -126,6 +126,12 @@ export class Fighter implements Rider {
   static onSay: ((f: Fighter, ctx: SayCtx) => void) | null = null;
   /** Thermal vision is on: everybody glows white-hot. */
   static thermal = false;
+  /** Extraction: the player carrying a golden jug, whom the enemy goes for. */
+  static vip: Combatant | null = null;
+  /** Battle royale: everyone starts with plain stats and no ammo, and picks fights closer in. */
+  static royale = false;
+  /** Battle royale: the safe circle. Bots stay inside it. */
+  static storm: { cx: number; cz: number; r: number } | null = null;
   /** Chaos events can make everybody huge. */
   static size = 1;
 
@@ -169,12 +175,17 @@ export class Fighter implements Rider {
   private repathT = 0;
   private potionGoal: Pickup | null = null;
   private mountGoal: Mount | null = null;
+  private brX = 0;
+  private brZ = 0;
+  private brT = 0;
   private weaponGoal: WeaponPickup | null = null;
   private weaponT = Math.random() * 5;
   private weaponCd = 2;
   ammoSniper = 0;
   ammoLauncher = 0;
   jugs = 0;
+  mines = 0;
+  private mineT = 8 + Math.random() * 12;
   private mountT = Math.random() * 6;
   private mountWant = Math.random() < 0.8;
   private potionT = Math.random() * 4;
@@ -206,7 +217,7 @@ export class Fighter implements Rider {
     this.hitH = undefined;
     this.mountGoal = null;
     this.weaponGoal = null;
-    this.ammoSniper = this.ammoLauncher = this.jugs = 0;
+    this.ammoSniper = this.ammoLauncher = this.jugs = this.mines = 0;
     this.armor = 0;
     this.sinceHurt = 99;
     this.mods.double = this.mods.swirl = 0;
@@ -222,11 +233,20 @@ export class Fighter implements Rider {
     this.armor = cls.armor * ez;
     this.speedMul = cls.speed;
     this.jugs = cls.jugs;
+    this.mines = cls.mines;
     this.ammoSniper = cls.sniper;
     this.ammoLauncher = cls.launcher;
     this.mods.double = cls.double;
     this.mods.swirl = cls.swirl;
     this.potion = cls.potion ? { kind: cls.potion, t: 60 } : null;
+    if (Fighter.royale) { // loot your own kit
+      this.maxHp = cls.hp * 2; // longer fights in the royale
+      this.hp = this.maxHp;
+      this.armor = cls.armor;
+      this.jugs = this.mines = this.ammoSniper = this.ammoLauncher = 0;
+      this.mods.double = this.mods.swirl = 0;
+      this.potion = null;
+    }
     this.bladder = 100;
     this.status.reset();
     this.target = null;
@@ -252,6 +272,8 @@ export class Fighter implements Rider {
     if (type === 'jug') this.jugs = Math.min(6, this.jugs + amount);
     else if (type === 'sniper') this.ammoSniper += amount;
     else if (type === 'launcher') this.ammoLauncher += amount;
+    else if (type === 'mine') this.mines += amount;
+    else if (type === 'jetpack') { /* bots stay on the ground */ }
     else if (type === 'health') this.heal(amount);
     else if (type === 'armor') this.armor = Math.min(100, this.armor + amount);
     else this.mods[type] = amount;
@@ -375,6 +397,14 @@ export class Fighter implements Rider {
     if (this.target && !this.target.alive) this.target = null;
     if (this.target) this.fight(dt, c);
     else { this.peeing = false; this.travel(dt, c); }
+    this.mineT -= dt;
+    if (this.mineT <= 0) {
+      this.mineT = 12 + Math.random() * 12;
+      if (this.mines > 0 && !this.target && !this.mount) { // plant one where we are walking
+        c.weapons.placeMine(this, this.pos.x, this.pos.z, this.potion?.kind ?? 'normal');
+        this.mines--;
+      }
+    }
     this.separate(dt, c);
     this.animate(dt);
     this.applyTint(c.time);
@@ -385,7 +415,10 @@ export class Fighter implements Rider {
 
   private findTarget(c: FightCtx) {
     const healer = this.potion?.kind === 'heal';
-    c.grid.query(this.pos.x, this.pos.z, healer ? 18 : this.ammoSniper > 0 ? 60 : 34, cand);
+    const reach = healer ? 18 : this.ammoSniper > 0 ? 60 : 34;
+    c.grid.query(this.pos.x, this.pos.z, Fighter.royale ? Math.min(reach, 22) : reach, cand);
+    const vip = Fighter.vip;
+    if (vip && vip.alive && vip.team !== this.team && !cand.includes(vip) && Math.hypot(vip.pos.x - this.pos.x, vip.pos.z - this.pos.z) < 55) cand.push(vip);
     const scored: { t: Combatant; s: number }[] = [];
     for (const t of cand) {
       if (!t.alive || t === this || t.isNpc) continue;
@@ -393,7 +426,7 @@ export class Fighter implements Rider {
       if (healer && t.team === this.team) {
         if (t.hp < t.maxHp * 0.8) scored.push({ t, s: d - 30 }); // hurt friends come first
       } else if (t.team !== this.team) {
-        scored.push({ t, s: d + (this.target === t ? -4 : 0) });
+        scored.push({ t, s: d + (this.target === t ? -4 : 0) - (t === Fighter.vip ? 35 : 0) });
       }
     }
     scored.sort((a, b) => a.s - b.s);
@@ -563,6 +596,8 @@ export class Fighter implements Rider {
           p.type === 'jug' ? this.jugs < 3
           : p.type === 'sniper' ? this.ammoSniper <= 0
           : p.type === 'launcher' ? this.ammoLauncher <= 0
+          : p.type === 'mine' ? this.mines < 1
+          : p.type === 'jetpack' ? false
           : p.type === 'health' ? this.hp < 70
           : p.type === 'armor' ? this.armor < 40
           : this.mods[p.type] < 5;
@@ -573,16 +608,29 @@ export class Fighter implements Rider {
     }
     if (this.weaponGoal && !this.weaponGoal.active) this.weaponGoal = null;
 
-    const goal = this.mountGoal ?? this.weaponGoal ?? this.potionGoal;
-    const gx = goal ? goal.pos.x : zone.x + this.wx;
-    const gz = goal ? goal.pos.z : zone.z + this.wz;
+    const st = Fighter.storm;
+    let outside = false;
+    if (st) { // battle royale: stay inside the safe circle and roam about it
+      outside = Math.hypot(this.pos.x - st.cx, this.pos.z - st.cz) > st.r * 0.85;
+      this.brT -= dt;
+      if (this.brT <= 0 || (outside && this.brT > 4)) {
+        const a = Math.random() * Math.PI * 2;
+        const rr = Math.sqrt(Math.random()) * st.r * 0.6;
+        this.brX = st.cx + Math.cos(a) * rr;
+        this.brZ = st.cz + Math.sin(a) * rr;
+        this.brT = 12 + Math.random() * 10;
+      }
+    }
+    const goal = outside ? null : (this.mountGoal ?? this.weaponGoal ?? this.potionGoal);
+    const gx = st ? (goal ? goal.pos.x : this.brX) : goal ? goal.pos.x : zone.x + this.wx;
+    const gz = st ? (goal ? goal.pos.z : this.brZ) : goal ? goal.pos.z : zone.z + this.wz;
     const dxg = gx - this.pos.x;
     const dzg = gz - this.pos.z;
     const dg = Math.hypot(dxg, dzg) || 0.01;
     const mul = this.status.speedMul;
     const SPEED = this.spd;
 
-    const inZone = !goal && Math.hypot(this.pos.x - zone.x, this.pos.z - zone.z) < zone.radius * 0.8;
+    const inZone = !goal && !st && Math.hypot(this.pos.x - zone.x, this.pos.z - zone.z) < zone.radius * 0.8;
     if (inZone) {
       // loiter inside the zone: that's what captures it
       this.wanderT -= dt;

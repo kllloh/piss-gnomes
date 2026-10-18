@@ -44,6 +44,8 @@ npm run build      # single self-contained dist/index.html you can double-click
   **Piss Nuke** (a 4 second siren, then a golden fireball that wipes out every enemy within 90 m of where you aimed;
   your side is safe). Bots shoot at your turret, so protect it.
 - **Testing cheat:** press **I** (or open the page with `?god`) to toggle invincibility. Nothing can hurt you, and the bug you ride is safe too.
+- **Piss mines (X):** plant a mine where you stand; it arms after a moment (red light blinks) and blows up with a 6.5 m splash when an enemy walks near. Classes start with 0 to 3, crates give 3 more, and bots plant them while they patrol.
+- **Jet packs:** a crate gives you a pack for 90 seconds: hold Space in the air to thrust (10 seconds of fuel, which recharges while you stand on the ground). Flames and a roar, and you steer a bit faster in the air.
 - **Bugs:** Disco Spider (fast, twin cannons), Tank Beetle (slow, tough, shotgun-style cannons), Zoom Ladybug (very
   fast, fragile). Press **E** next to one to ride it; while you ride, the bug takes the damage. Bots ride them too, and
   popped bugs come back after 40 seconds.
@@ -57,6 +59,16 @@ npm run build      # single self-contained dist/index.html you can double-click
 - **Chris:** a big black cat who is always with Rory. Every 14 to 22 seconds he farts a cloud of green **health gas** that heals everyone standing in it (friend or foe) for 7 seconds. Look for the green circle on the minimap. He cannot be hurt either. Rory and Chris start each match out in the wild, away from both bases.
 - **Audio:** the music is much quieter now, with a volume slider and music/voices on/off buttons in the lobby (N and M also toggle them in game).
 - **Derek:** once per match, at a random moment in the first two minutes, a clean-shaven old farmer with black hair roars in from a random edge of the map on a giant ride-on mower (about 13 m tall, ten times a gnome). He drives wide, slow turns at 11 m/s for 100 seconds, cutting down every tree, cactus, mushroom and palm under his 13 m deck and mowing down any gnome (or you) in the way, then drives off home. He cannot be hurt, only annoyed. Watch for the green block on the minimap and the announcer's warning.
+- **Game modes** (GAME MODE on the start screen; picking one restarts the match):
+  - **Capture the Zones:** the original. Hold more zones than the enemy to drain their tickets; you respawn.
+  - **Extraction:** three glowing **golden jugs** are hidden in the forest. Pick one up (it slows you 15% and the enemy goes
+    after you), carry it to the cyan **extraction point** at your base, and repeat. All three home within 12 minutes wins;
+    run out of tickets or time and you lose. Die and the jug drops where you fell. The objective, distance and timer are at
+    the top of the screen and the minimap shows the jugs and the pad.
+  - **Battle Royale:** 25 a side dropped at random spots, **no respawns**, everyone twice the health and starting with
+    only their class stats; loot crates do not come back. A **storm** (the magenta wall) closes in on a shrinking safe
+    circle in six phases and does more damage each phase; the minimap shows the circle and, during the pause between
+    shrinks, the next one. Last team standing wins; if you die, the match ends for you after a few seconds.
 - **Maps:** pick on the start screen (the page reloads with the new map). **The Enchanted Forest** is the original night
   forest. **Desert Trip** is a hot, bright, hallucinogenic desert: neon cacti, striped mesas, an oasis, giant bones, a
   spinning sun over the Sun Temple, floating mirage orbs and a swirling day sky. Same zones, bugs, weapons and bots.
@@ -69,9 +81,8 @@ npm run build      # single self-contained dist/index.html you can double-click
   faster.
 - **Lobby:** the start screen is now a Call-of-Duty-style lobby: tabs (PLAY / LOADOUT / INTEL), a 3D gnome on a turntable
   with your class prop, loadout stats, match info, a squad list and a big DEPLOY button (or press Enter).
-- **Graphics options** (start screen, or **H**): **PS2** (below), **ASCII** (the whole picture redrawn as coloured text, brighter areas using denser characters) and plain **HD**.
 - **Soundtracks:** Mushroom Hollow plays generative **acid techno** (134 BPM, four-on-the-floor, a squelching 303 bassline with accents and slides, claps, off-beat hats, arps and breakdowns). Desert Trip plays **stoner metal** (70 BPM, fuzzed drop-D power-chord riffs, a lumbering half-time groove, tom fills, crashes and a wailing solo). The forest keeps the weird jam. All of it is made live with Web Audio.
-- **Art:** blocky PlayStation 2 style: hard-edged low-poly shapes, chunky low-res textures, a 480p picture with dithered 5-bit colour, bloom and interlace lines, on top of the psychedelic sky and warping. Neon 80s UI. **H** switches between PS2 and HD.
+- **Art:** hard-edged low-poly shapes and chunky textures under a swirling psychedelic sky, with a warp that gets stronger the more damage you take. Neon 80s UI.
 - **Trippy mode:** swirling sky, warped colour-shifting picture and drifting spores. The warp and colour-melt get stronger the more damage you take, and settle as your health regenerates.
 - **Phones and tablets:** touch controls appear automatically: a floating move stick on the left, drag anywhere else to look, a big PEE/FIRE button (drag it to aim while firing), plus JUMP, JUG, SWAP, RIDE, ZOOM (with the sniper), YELL and pause. Play in landscape; the first tap goes fullscreen where the browser allows it.
 - **Controls:** WASD move, Space jump, Shift walk, mouse aim, hold click to pee, E ride / hop off, Esc pause,

@@ -833,6 +833,35 @@ export class Sound {
     this.mowNodes.pan.pan.setTargetAtTime(pan, t, 0.08);
   }
 
+  private jetNodes: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+
+  /** Jet pack: a rushing, rumbling hiss while you are thrusting. */
+  jet(on: boolean) {
+    if (!this.ctx || !this.noise) return;
+    const t = this.ctx.currentTime;
+    if (on && !this.jetNodes) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 900;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0.0001;
+      src.connect(lp).connect(gain).connect(this.ctx.destination);
+      src.start();
+      this.jetNodes = { src, gain };
+    }
+    const n = this.jetNodes;
+    if (!n) return;
+    if (on) n.gain.gain.setTargetAtTime(0.2, t, 0.05);
+    else {
+      n.gain.gain.setTargetAtTime(0.0001, t, 0.08);
+      this.jetNodes = null;
+      setTimeout(() => { try { n.src.stop(); } catch { /* already stopped */ } }, 400);
+    }
+  }
+
   ignite() {
     this.burst(0.35, 3200, 0.35);
     this.tone(0.1, 120, 300, 0.3, 'sawtooth');

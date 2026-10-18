@@ -90,10 +90,7 @@ uniform float time;
 uniform float amp;
 uniform float pulse;
 uniform float tint;
-uniform float ink;
 uniform float thermal;
-uniform float ascii;
-uniform sampler2D font;
 uniform vec2 res;
 varying vec2 vUv;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -140,44 +137,6 @@ void main() {
     h = mix(h, vec3(1.0, 1.0, 0.75), smoothstep(0.7, 1.0, t));
     col = h * h; // the rest of the pipeline expects linear colour
   }
-  if (ascii > 0.5) {
-    // ASCII: the whole picture redrawn in coloured text, one character per cell, denser characters for brighter cells
-    const float N = 10.0;
-    vec2 cellPx = vec2(7.0, 13.0) * max(1.0, res.y / 800.0);
-    vec2 p = vUv * res;
-    vec2 id = floor(p / cellPx);
-    vec2 local = fract(p / cellPx);
-    vec2 cuv = (id + 0.5) * cellPx / res;
-    vec2 off = cellPx * 0.3 / res;
-    vec3 c = (texture2D(tDiffuse, cuv).rgb
-            + texture2D(tDiffuse, cuv + vec2(off.x, off.y)).rgb
-            + texture2D(tDiffuse, cuv + vec2(-off.x, off.y)).rgb
-            + texture2D(tDiffuse, cuv + vec2(off.x, -off.y)).rgb
-            + texture2D(tDiffuse, cuv + vec2(-off.x, -off.y)).rgb) * 0.2;
-    float l = sqrt(max(dot(c, vec3(0.299, 0.587, 0.114)), 0.0));
-    float idx = floor(clamp(pow(l, 1.8) * 1.25, 0.0, 0.999) * N);
-    float gl = texture2D(font, vec2((idx + local.x) / N, local.y)).r;
-    vec3 pc = sqrt(max(c, 0.0));
-    pc = mix(vec3(dot(pc, vec3(0.299, 0.587, 0.114))), pc, 1.5);
-    vec3 oc = pc * (0.07 + 1.25 * gl);
-    col = oc * oc;
-  }
-  if (ink > 0.0) {
-    // --- PlayStation 2 look: low-res picture, a little bloom, saturated colour, 5-bit colour with an ordered dither ---
-    vec2 px = 1.0 / res;
-    vec3 glow = texture2D(tDiffuse, vUv + px * vec2(2.0, 0.0)).rgb + texture2D(tDiffuse, vUv - px * vec2(2.0, 0.0)).rgb
-              + texture2D(tDiffuse, vUv + px * vec2(0.0, 2.0)).rgb + texture2D(tDiffuse, vUv - px * vec2(0.0, 2.0)).rgb;
-    col += max(glow * 0.25 - 0.6, 0.0) * 0.4 * ink;
-    float l = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(l), col, 1.0 + 0.3 * ink);
-    vec2 q = mod(floor(vUv * res), 4.0);
-    float ba = mod(q.x, 2.0), bb = floor(q.x / 2.0), bc = mod(q.y, 2.0), bd = floor(q.y / 2.0);
-    float bayer = (8.0 * abs(ba - bc) + 4.0 * bc + 2.0 * abs(bb - bd) + bd) / 16.0;
-    vec3 pc = sqrt(col);
-    pc = floor((pc + (bayer - 0.5) / 14.0) * 31.0 + 0.5) / 31.0;
-    col = pc * pc;
-    col *= 1.0 - 0.07 * ink * step(0.5, fract(vUv.y * res.y * 0.5)); // faint interlace lines
-  }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
 }`;
@@ -187,7 +146,6 @@ export class Trip {
   /** 0 = off, 1 = mild, 2 = full. */
   level = 2;
   private _theme: 'forest' | 'desert' | 'mush' = 'forest';
-  private _style: 'ps2' | 'ascii' | 'hd' = 'ps2';
   get theme() {
     return this._theme;
   }
@@ -195,31 +153,12 @@ export class Trip {
     this._theme = v;
     (this.sky.material as THREE.ShaderMaterial).uniforms.hot.value = v === 'desert' ? 1 : v === 'mush' ? 2 : 0;
   }
-  get style() {
-    return this._style;
-  }
-  /** The graphics option: PlayStation 2, ASCII, or plain HD. */
-  set style(v: 'ps2' | 'ascii' | 'hd') {
-    this._style = v;
-    this.uniforms.ascii.value = v === 'ascii' ? 1 : 0;
-    this.ink = v === 'ps2' ? 1 : 0;
-  }
   /** Thermal vision on/off. */
   set thermal(v: boolean) {
     this.uniforms.thermal.value = v ? 1 : 0;
   }
   get thermal() {
     return this.uniforms.thermal.value > 0.5;
-  }
-  private _ink = 1;
-  /** PlayStation 2 look, 0..1: 480p picture, dither, bloom. */
-  get ink(): number {
-    return this._ink;
-  }
-  set ink(v: number) {
-    const changed = v > 0 !== this._ink > 0;
-    this._ink = v;
-    if (changed && this.rt) this.makeTarget();
   }
   private rt: THREE.WebGLRenderTarget | null = null;
   private quad: THREE.Mesh | null = null;
@@ -231,10 +170,7 @@ export class Trip {
     amp: { value: 0.5 },
     pulse: { value: 0 },
     tint: { value: 0 },
-    ink: { value: 1 },
     thermal: { value: 0 },
-    ascii: { value: 0 },
-    font: { value: null as THREE.Texture | null },
     res: { value: new THREE.Vector2(1, 1) },
   };
   private sky: THREE.Mesh;
@@ -246,27 +182,6 @@ export class Trip {
   postOk = false;
 
   constructor(private renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
-    // the glyph strip for ASCII mode, darkest to brightest
-    {
-      const chars = ' .:-=+*#%@';
-      const cw = 16;
-      const ch = 32;
-      const c = document.createElement('canvas');
-      c.width = cw * chars.length;
-      c.height = ch;
-      const g = c.getContext('2d')!;
-      g.fillStyle = '#000';
-      g.fillRect(0, 0, c.width, c.height);
-      g.fillStyle = '#fff';
-      g.font = 'bold 28px monospace';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      for (let i = 0; i < chars.length; i++) g.fillText(chars[i], i * cw + cw / 2, ch / 2 + 1);
-      const tex = new THREE.CanvasTexture(c);
-      tex.minFilter = tex.magFilter = THREE.LinearFilter;
-      tex.generateMipmaps = false;
-      this.uniforms.font.value = tex;
-    }
     // sky dome that always sits on the camera
     this.sky = new THREE.Mesh(
       new THREE.SphereGeometry(90, 32, 16),
@@ -312,23 +227,10 @@ export class Trip {
 
   private makeTarget() {
     this.renderer.getDrawingBufferSize(this.size);
-    let w = this.size.x;
-    let h = this.size.y;
-    const ps2 = this._ink > 0;
-    if (ps2) { // render at roughly 480p and let the pixels show
-      const k = Math.min(1, 480 / h);
-      w = Math.max(8, Math.round(w * k));
-      h = Math.max(8, Math.round(h * k));
-    }
     this.rt?.dispose();
-    this.rt = new THREE.WebGLRenderTarget(w, h, {
-      type: THREE.HalfFloatType,
-      samples: ps2 ? 0 : 4,
-      magFilter: ps2 ? THREE.NearestFilter : THREE.LinearFilter,
-      minFilter: ps2 ? THREE.NearestFilter : THREE.LinearFilter,
-    });
+    this.rt = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.uniforms.tDiffuse.value = this.rt.texture;
-    this.uniforms.res.value.set(w, h);
+    this.uniforms.res.value.set(this.size.x, this.size.y);
   }
 
   resize() {
@@ -373,7 +275,7 @@ export class Trip {
   /** Render the scene, through the warp pass if it is available and switched on. */
   render(scene: THREE.Scene, camera: THREE.Camera, t: number, amp: number, beat: number, tint: number) {
     const a = amp * (this.level === 2 ? 1 : this.level === 1 ? 0.4 : 0);
-    if (!this.postOk || !this.rt || !this.quad || (this.level === 0 && this.ink === 0)) {
+    if (!this.postOk || !this.rt || !this.quad || this.level === 0) {
       this.renderer.setRenderTarget(null);
       this.renderer.render(scene, camera);
       return;
@@ -382,7 +284,6 @@ export class Trip {
     this.uniforms.amp.value = a;
     this.uniforms.pulse.value = beat;
     this.uniforms.tint.value = tint;
-    this.uniforms.ink.value = this.ink;
     this.renderer.setRenderTarget(this.rt);
     this.renderer.render(scene, camera);
     this.renderer.setRenderTarget(null);

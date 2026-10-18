@@ -19,6 +19,8 @@ const near: Combatant[] = [];
 /** Potion bottles lying around the forest. Grab one and your pee changes type for a while. */
 export class Potions {
   readonly list: Pickup[] = [];
+  /** Battle royale: once it is gone, it is gone. */
+  noRespawn = false;
 
   constructor(scene: THREE.Scene, spots: THREE.Vector3[]) {
     const bodyGeo = new SoftBox(0.42, 0.55, 0.42);
@@ -75,6 +77,7 @@ export class Potions {
   update(dt: number, t: number, grid: SpatialGrid, onTake: (p: Pickup, who: Combatant) => void) {
     for (const p of this.list) {
       if (!p.active) {
+        if (this.noRespawn) continue;
         p.respawnT -= dt;
         if (p.respawnT <= 0) {
           p.active = true;

@@ -14,6 +14,8 @@
   #crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
   #crosshair::after { top: 9px; left: 0; height: 2px; width: 20px; }
   .glass { background: rgba(8, 6, 28, 0.66); border: 1px solid #19e3ff; box-shadow: 0 0 8px rgba(25,227,255,.7), inset 0 0 8px rgba(255,43,214,.35); border-radius: 8px; }
+  #objective { position: fixed; top: 84px; left: 50%; transform: translateX(-50%); font-size: 13px; letter-spacing: 1px; padding: 4px 14px; pointer-events: none; display: none; background: rgba(8,6,28,.62); border: 1px solid #ffd070; text-shadow: 0 0 4px #000; white-space: nowrap; }
+  #stormfx { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 15; background: radial-gradient(ellipse at center, transparent 35%, rgba(255,43,214,.6) 100%); }
   #tickets { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); padding: 6px 18px; text-align: center; font-size: 22px; text-shadow: 0 0 4px #000; pointer-events: none; }
   #zonebar { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
   .pip { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.6); background: #888; }
@@ -95,6 +97,12 @@
   .t-desert { background: linear-gradient(180deg, #2fc8ff 0%, #ffb050 55%, #ffd27a 56%, #f0a040 100%); }
   .t-mush { background: linear-gradient(180deg, #1a0840 0%, #a02a90 55%, #3a1a5a 56%, #1a0a30 100%); }
   .optrow { margin: 0; justify-content: flex-start; }
+  .moderow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .mode-card { padding: 9px 10px; cursor: pointer; border: 2px solid rgba(255,255,255,.18); background: rgba(255,255,255,.05); transition: border-color .15s, background .15s; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); }
+  .mode-card:hover { border-color: #19e3ff; }
+  .mode-card.selected { border-color: #ff2bd6; background: rgba(255,43,214,.16); box-shadow: 0 0 14px rgba(255,43,214,.5); }
+  .mode-card b { display: block; font-size: 11px; letter-spacing: 1px; margin-bottom: 3px; }
+  .mode-card small { display: block; font-size: 10px; color: #a8c8d6; line-height: 1.35; }
   #music-vol { accent-color: #ff2bd6; width: 140px; cursor: pointer; }
   .opt-card { padding: 7px 18px; font-size: 13px; letter-spacing: 2px; }
   #classrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -124,7 +132,7 @@
   @media (max-width: 960px) {
     #lb-main { grid-template-columns: 1fr; }
     #lb-center { display: none; }
-    .maprow { grid-template-columns: 1fr; }
+    .maprow, .moderow { grid-template-columns: 1fr; }
     #lb-logo { font-size: 20px; }
     #lb-tabs button { padding: 10px 10px; font-size: 12px; letter-spacing: 1px; }
     #lb-player { display: none; }
@@ -135,6 +143,8 @@
 <body>
 <div id="crosshair"></div>
 <div id="tickets" class="glass"><div id="tix"></div><div id="zonebar"></div></div>
+<div id="objective"></div>
+<div id="stormfx"></div>
 <canvas id="minimap" class="glass" width="190" height="190"></canvas>
 <div id="feed"></div>
 <div id="meters" class="glass">
@@ -179,14 +189,18 @@
             <div class="faction-card" data-f="gnome"><b style="color:#ff7a7a">RED HATS</b><small>Posh, pointy and proud.<br>Defend the garden.</small></div>
             <div class="faction-card" data-f="goblin"><b style="color:#7ab4ff">BLUE CAPS</b><small>Gruff, grubby, gleeful.<br>Raid the garden.</small></div>
           </div>
+          <h3 class="lb-h">GAME MODE</h3>
+          <div class="moderow">
+            <div class="mode-card" data-mo="zones"><b>CAPTURE THE ZONES</b><small>Hold more zones than the enemy to drain their tickets. You respawn.</small></div>
+            <div class="mode-card" data-mo="extract"><b>EXTRACTION</b><small>Steal three golden jugs from the forest and carry them home before time runs out. The enemy hunts the carrier.</small></div>
+            <div class="mode-card" data-mo="royale"><b>BATTLE ROYALE</b><small>Scattered drop, no respawns. The storm closes in. Last team standing wins.</small></div>
+          </div>
           <h3 class="lb-h">SELECT MAP</h3>
           <div class="maprow">
             <div class="map-card" data-m="forest"><i class="thumb t-forest"></i><b>Enchanted Forest</b><small>Night. Towering trees, crystals and ruins.</small></div>
             <div class="map-card" data-m="desert"><i class="thumb t-desert"></i><b>Desert Trip</b><small>Hot and bright. Neon cacti and mesas.</small></div>
             <div class="map-card" data-m="mush"><i class="thumb t-mush"></i><b>Mushroom Hollow</b><small>A glowing fungal cavern of giant caps.</small></div>
           </div>
-          <h3 class="lb-h">GRAPHICS</h3>
-          <div class="optrow"><div class="opt-card" data-g="ps2">PS2</div><div class="opt-card" data-g="ascii">ASCII</div><div class="opt-card" data-g="hd">HD</div></div>
           <h3 class="lb-h">AUDIO</h3>
           <div class="optrow"><div class="opt-card" id="btn-music">MUSIC: ON</div><div class="opt-card" id="btn-voices">VOICES: ON</div><span style="font-size:11px;letter-spacing:2px;color:#9fd8e8">VOLUME</span><input id="music-vol" type="range" min="0" max="100" value="50"></div>
         </div>
@@ -207,7 +221,7 @@
           <p><b style="color:#ffd070">Kill streaks</b>: 3 = Piss Turret, 5 = Piss Air Strike, 8 = Piss Nuke. Press <b>R</b> to use.</p>
           <p id="touchhint" style="display:none;color:#ff7af0">Touch: left side = move stick, drag anywhere else to look, big button = pee. Buttons: JUMP, JUG, SWAP, RIDE, YELL, ZOOM, STREAK.</p>
           <p>WASD move &middot; Space jump &middot; Shift walk &middot; Mouse aim (aim up for range!) &middot; Hold click to pee &middot; E ride &middot; Esc pause</p>
-          <p>V shout &middot; M voices &middot; N music &middot; F thermal vision (Sniper and Scout) &middot; H graphics (PS2 / ASCII / HD). Red arrows float above enemies. The world warps and melts more the more damage you take.</p>
+          <p>V shout &middot; M voices &middot; N music &middot; F thermal vision (Sniper and Scout). Red arrows float above enemies. The world warps and melts more the more damage you take.</p>
           <p>Stand in a zone to capture it. Hold more zones than the enemy and their tickets drain. Deaths cost a ticket too.</p>
         </div>
       </section>

@@ -40,6 +40,10 @@ export class Player implements Rider {
   mount: Mount | null = null;
   armor = 0;
   speedMul = 1; // class
+  /** Jet pack: seconds of pack left, seconds of fuel in the tank, and whether it is firing. */
+  jetTime = 0;
+  fuel = 0;
+  jetting = false;
   /** Testing cheat: nothing can hurt you (press I, or add ?god to the address). */
   god = false;
   /** Seconds since last losing health; after a few quiet seconds health creeps back. */
@@ -130,6 +134,8 @@ export class Player implements Rider {
     this.status.reset();
     this.potion = null;
     this.armor = 0;
+    this.jetTime = 0;
+    this.fuel = 0;
     this.sinceHurt = 99;
     this.mods.double = this.mods.swirl = 0;
     this.bladder = 100;
@@ -167,7 +173,13 @@ export class Player implements Rider {
     if (len > 1) { wx /= len; wz /= len; } // (a half-pushed stick walks slower)
     const run = this.mount ? this.mount.def.speed : RUN * this.speedMul;
     const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? run * 0.5 : run) * this.status.speedMul;
-    const accel = this.onGround ? 55 : 9;
+    const jetHeld = k.has('Space') || (!stuck && this.jumpHeld);
+    this.jetTime = Math.max(0, this.jetTime - dt);
+    const jetting = this.jetTime > 0 && this.fuel > 0 && jetHeld && !this.onGround;
+    this.jetting = jetting;
+    if (jetting) this.fuel = Math.max(0, this.fuel - dt);
+    else if (this.onGround && this.jetTime > 0) this.fuel = Math.min(10, this.fuel + 2.5 * dt);
+    const accel = this.onGround ? 55 : jetting ? 24 : 9;
     const stepX = accel * dt;
     this.vel.x += Math.max(-stepX, Math.min(stepX, wx * speed - this.vel.x));
     this.vel.z += Math.max(-stepX, Math.min(stepX, wz * speed - this.vel.z));
@@ -182,6 +194,7 @@ export class Player implements Rider {
     const h = dt / steps;
     for (let i = 0; i < steps; i++) {
       this.vel.y = Math.max(-30, this.vel.y - GRAVITY_BASE * this.gravityMul * h);
+      if (jetting && this.pos.y < 24) this.vel.y = Math.min(6.5, this.vel.y + 42 * h); // thrust fades out near the ceiling
       if (this.world.moveAxis(this.pos, hw, PLAYER_H, 'x', this.vel.x * h)) this.vel.x = 0;
       if (this.world.moveAxis(this.pos, hw, PLAYER_H, 'z', this.vel.z * h)) this.vel.z = 0;
       this.onGround = false;

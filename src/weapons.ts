@@ -4,7 +4,7 @@ import { PEE, type Combatant, type PeeKind, type SpatialGrid } from './combat';
 import type { World } from './world';
 
 export type WeaponType = 'sniper' | 'launcher';
-export type PickupType = 'jug' | WeaponType | 'health' | 'armor' | 'double' | 'swirl';
+export type PickupType = 'jug' | WeaponType | 'health' | 'armor' | 'double' | 'swirl' | 'mine' | 'jetpack';
 
 export const PROJ_GRAVITY = 9;
 export const JUG_SPEED = 15;
@@ -17,6 +17,7 @@ export interface BlastSpec {
 }
 export const JUG_BLAST: BlastSpec = { radius: 5, dmg: 55 };
 export const ROCKET_BLAST: BlastSpec = { radius: 6.5, dmg: 70 };
+export const MINE_BLAST: BlastSpec = { radius: 6.5, dmg: 90 };
 export const BOMB_BLAST: BlastSpec = { radius: 8.5, dmg: 95 };
 
 interface Proj {
@@ -92,6 +93,39 @@ export function makeLauncher(): THREE.Group {
 }
 
 /** Thrown jugs, launched pee-balls and sniper beams. The game decides what an explosion does. */
+export function makeMineModel(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.55, 0.22, 12), lit({ color: 0x3a3a44 })));
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.08, 12), new THREE.MeshBasicMaterial({ color: 0xf2c31a }));
+  band.position.y = 0.04;
+  const led = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 0), new THREE.MeshBasicMaterial({ color: 0xff3030 }));
+  led.position.y = 0.2;
+  led.name = 'led';
+  g.add(band, led);
+  g.scale.setScalar(1.3);
+  return g;
+}
+
+function makeJetpack(): THREE.Group {
+  const g = new THREE.Group();
+  const steel = lit({ color: 0x8a90a0 });
+  for (const x of [-0.24, 0.24]) {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.95, 10), steel);
+    tank.position.x = x;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.14, 10), lit({ color: 0xf2c31a }));
+    cap.position.set(x, 0.5, 0);
+    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 0.2, 10), lit({ color: 0x2a2a30 }));
+    nozzle.position.set(x, -0.55, 0);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.45, 8), new THREE.MeshBasicMaterial({ color: 0xff9a30 }));
+    flame.rotation.x = Math.PI;
+    flame.position.set(x, -0.9, 0);
+    g.add(tank, cap, nozzle, flame);
+  }
+  g.add(new THREE.Mesh(new SoftBox(0.7, 0.2, 0.3), lit({ color: 0x4a4a54 })));
+  g.scale.setScalar(1.3);
+  return g;
+}
+
 function at(m: THREE.Mesh, x: number, y: number, z: number): THREE.Mesh {
   m.position.set(x, y, z);
   return m;
@@ -147,6 +181,7 @@ export function makeSwirl(): THREE.Group {
 export class Weapons {
   private projs: Proj[] = [];
   private beams: Beam[] = [];
+  private mines: { x: number; z: number; team: number; owner: Combatant; kind: PeeKind; armT: number; mesh: THREE.Group; led: THREE.Mesh }[] = [];
   /** Everyone who can be shot by the sniper. */
   everyone: () => Combatant[] = () => [];
   onExplode: ((pos: THREE.Vector3, blast: BlastSpec, kind: PeeKind, shooter: Combatant, rocket: boolean) => void) | null = null;
@@ -222,6 +257,16 @@ export class Weapons {
     this.onSnipe?.(victim, head, end, pee, shooter);
   }
 
+  /** Plant a piss mine. It arms after a moment and goes off when an enemy steps near. */
+  placeMine(owner: Combatant, x: number, z: number, kind: PeeKind) {
+    const mesh = makeMineModel();
+    mesh.position.set(x, 0.12, z);
+    this.scene.add(mesh);
+    const led = mesh.getObjectByName('led') as THREE.Mesh;
+    this.mines.push({ x, z, team: owner.team, owner, kind, armT: 1.4, mesh, led });
+    if (this.mines.length > 50) this.scene.remove(this.mines.shift()!.mesh);
+  }
+
   private beam(a: THREE.Vector3, b: THREE.Vector3, color: number) {
     const len = a.distanceTo(b);
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, len), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }));
@@ -240,9 +285,28 @@ export class Weapons {
     this.projs.length = 0;
     for (const b of this.beams) this.scene.remove(b.mesh);
     this.beams.length = 0;
+    for (const m of this.mines) this.scene.remove(m.mesh);
+    this.mines.length = 0;
   }
 
   update(dt: number) {
+    for (let i = this.mines.length - 1; i >= 0; i--) {
+      const m = this.mines[i];
+      m.armT -= dt;
+      const armed = m.armT <= 0;
+      (m.led.material as THREE.MeshBasicMaterial).color.setHex(armed ? (Math.floor(performance.now() / 350) % 2 ? 0xff2020 : 0x501010) : 0xf2c31a);
+      if (!armed) continue;
+      this.grid.query(m.x, m.z, 2.8, near);
+      let trip = false;
+      for (const c of near) {
+        if (c.alive && !c.isNpc && c.team !== m.team && c.pos.y < 3) { trip = true; break; }
+      }
+      if (trip) {
+        this.mines.splice(i, 1);
+        this.scene.remove(m.mesh);
+        this.onExplode?.(tmp.set(m.x, 0.4, m.z), MINE_BLAST, m.kind, m.owner, true);
+      }
+    }
     for (let i = this.beams.length - 1; i >= 0; i--) {
       const b = this.beams[i];
       b.life -= dt;
@@ -300,6 +364,8 @@ export interface WeaponPickup {
 }
 
 export const PICKUP_INFO: Record<PickupType, { name: string; blurb: string; amount: number; color: number; respawn?: number }> = {
+  mine: { name: 'Piss Mines', blurb: 'Press X to plant one. It goes off when an enemy walks close.', amount: 3, color: 0xff5a30 },
+  jetpack: { name: 'Jet Pack', blurb: 'Hold Space in the air to fly. Fuel recharges on the ground. Lasts 90 seconds.', amount: 90, color: 0x30ffd0, respawn: 60 },
   health: { name: 'Health Kit', blurb: 'Patched right up.', amount: 60, color: 0xff4060, respawn: 30 },
   armor: { name: 'Armour', blurb: 'Soaks most of the next hits.', amount: 50, color: 0x60a0ff, respawn: 40 },
   double: { name: 'Double Stream', blurb: 'Two streams. Twice the damage, for 35 seconds.', amount: 35, color: 0xffa030 },
@@ -313,6 +379,7 @@ const pnear: Combatant[] = [];
 
 export class WeaponPickups {
   readonly list: WeaponPickup[] = [];
+  noRespawn = false;
 
   constructor(scene: THREE.Scene, spots: { type: PickupType; pos: THREE.Vector3 }[]) {
     for (const s of spots) {
@@ -324,6 +391,8 @@ export class WeaponPickups {
         : s.type === 'health' ? makeHealth()
         : s.type === 'armor' ? makeArmor()
         : s.type === 'double' ? makeDouble()
+        : s.type === 'mine' ? makeMineModel()
+        : s.type === 'jetpack' ? makeJetpack()
         : makeSwirl();
       if (s.type === 'jug') model.scale.setScalar(1.5);
       const halo = new THREE.Mesh(new SoftBox(1, 1, 1, 0.45), new THREE.MeshBasicMaterial({ color: PICKUP_INFO[s.type].color, transparent: true, opacity: 0.22, depthWrite: false }));
@@ -354,6 +423,7 @@ export class WeaponPickups {
   update(dt: number, t: number, grid: SpatialGrid, onTake: (p: WeaponPickup, who: Combatant) => void) {
     for (const p of this.list) {
       if (!p.active) {
+        if (this.noRespawn) continue;
         p.respawnT -= dt;
         if (p.respawnT <= 0) { p.active = true; p.group.visible = true; }
         continue;

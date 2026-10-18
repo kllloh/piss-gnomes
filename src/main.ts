@@ -23,7 +23,7 @@ import { Chris } from './chris';
 import { Derek } from './derek';
 import { initTouch, isTouchDevice } from './touch';
 import { Streaks, REWARD_INFO, type Reward } from './streaks';
-import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, type PickupType, type BlastSpec } from './weapons';
+import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, makeJug, type PickupType, type BlastSpec } from './weapons';
 import { Mount, Mounts, MOUNT_DEFS, type MountSpot, type MountType } from './mounts';
 import type { Faction } from './gnome';
 
@@ -233,6 +233,8 @@ const pickupSpots: { type: PickupType; pos: THREE.Vector3 }[] = [];
     pickupSpots.push({ type: 'armor', pos: freeNear(z.x - 7, z.z - 12) });
     pickupSpots.push({ type: extra[2 + (n++ % 2)], pos: freeNear(z.x - 14, z.z + 3) });
   }
+  for (const z of forest.zones) pickupSpots.push({ type: 'mine', pos: freeNear(z.x + 13, z.z - 4) });
+  forest.zones.slice(1, 6).forEach((z) => pickupSpots.push({ type: 'jetpack', pos: freeNear(z.x - 4, z.z + 15) }));
   for (const side of [1, -1]) {
     const b = side === 1 ? forest.baseSouth : forest.baseNorth;
     pickupSpots.push({ type: 'health', pos: freeNear(b.x - 14, b.z - side * 10) });
@@ -289,6 +291,8 @@ const elChatter = $('chatter');
 const elWeapon = $('weaponline');
 const elScope = $('scope');
 const elDeploy = $('deploy');
+const elObjective = $('objective');
+const elStorm = $('stormfx');
 const elStreak = $('streakline');
 const elFlash = $('flash');
 const mini = $('minimap') as HTMLCanvasElement;
@@ -427,6 +431,7 @@ let weapon: Wpn = 'pee';
 let ammoSniper = 0;
 let ammoLauncher = 0;
 let jugs = 0;
+let mines = 0;
 let fireCd = 0;
 let jugCd = 0;
 let zooming = false;
@@ -452,11 +457,12 @@ function toggleThermal() {
 function applyPlayerClass() {
   setThermal(false);
   const c = classOf(classId);
-  player.maxHp = c.hp;
-  player.hp = c.hp;
+  player.maxHp = c.hp * (mode === 'royale' ? 2 : 1);
+  player.hp = player.maxHp;
   player.armor = c.armor;
   player.speedMul = c.speed;
   jugs = c.jugs;
+  mines = c.mines;
   ammoSniper = c.sniper;
   ammoLauncher = c.launcher;
   player.mods.double = c.double;
@@ -467,7 +473,7 @@ function applyPlayerClass() {
 
 function resetWeapons() {
   weapon = 'pee';
-  ammoSniper = ammoLauncher = jugs = 0;
+  ammoSniper = ammoLauncher = jugs = mines = 0;
   zooming = false;
 }
 let streak = 0;
@@ -495,7 +501,216 @@ function respawnPoint(team: 0 | 1): { pos: THREE.Vector3; yaw: number } {
   return { pos: pick(team === 0 ? forest.spawnSouth : forest.spawnNorth).clone(), yaw };
 }
 
+// --- game modes: capture the zones, extraction, battle royale ------------------------------------------
+type Mode = 'zones' | 'extract' | 'royale';
+const MODE_NAMES: Record<Mode, string> = { zones: 'CAPTURE THE ZONES', extract: 'EXTRACTION', royale: 'BATTLE ROYALE' };
+let mode: Mode = (() => {
+  const ok = (v: string | null): v is Mode => v === 'zones' || v === 'extract' || v === 'royale';
+  const q = new URLSearchParams(location.search).get('mode');
+  if (ok(q)) return q;
+  try { const sv = localStorage.getItem('pg-mode'); if (ok(sv)) return sv; } catch { /* storage unavailable */ }
+  return 'zones';
+})();
+
+function endMatch(won: boolean, text: string) {
+  if (phase !== 'play') return;
+  phase = 'end';
+  phaseT = 9;
+  banner(text, 8);
+  announcer(won ? 'victory' : 'defeat');
+}
+
+// extraction: three golden jugs to find, one extraction point at your base
+const EXTRACT_TIME = 720;
+const JUGS_NEEDED = 3;
+interface GoldJug { x: number; z: number; active: boolean; group: THREE.Group }
+const extractGroup = new THREE.Group();
+scene.add(extractGroup);
+const goldJugs: GoldJug[] = [];
+for (let i = 0; i < JUGS_NEEDED; i++) {
+  const g = new THREE.Group();
+  const jug = makeJug(0xffe040);
+  jug.scale.setScalar(3.2);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 90, 10), new THREE.MeshBasicMaterial({ color: 0xffd040, transparent: true, opacity: 0.38, depthWrite: false }));
+  beam.position.y = 45;
+  const halo = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.08, 20), new THREE.MeshBasicMaterial({ color: 0xffd040, transparent: true, opacity: 0.4, depthWrite: false }));
+  halo.position.y = 0.05;
+  g.add(jug, beam, halo);
+  jug.position.y = 1.8;
+  extractGroup.add(g);
+  goldJugs.push({ x: 0, z: 0, active: false, group: g });
+}
+const extractPad = new THREE.Group();
+{
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 0.1, 36), new THREE.MeshBasicMaterial({ color: 0x19e3ff, transparent: true, opacity: 0.33, depthWrite: false }));
+  disc.position.y = 0.06;
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 80, 10), new THREE.MeshBasicMaterial({ color: 0x19e3ff, transparent: true, opacity: 0.35, depthWrite: false }));
+  pillar.position.y = 40;
+  extractPad.add(disc, pillar);
+  extractPad.position.set(forest.baseSouth.x, 0, forest.baseSouth.z - 6);
+  extractGroup.add(extractPad);
+}
+let delivered = 0;
+let carrying = false;
+let extractT = EXTRACT_TIME;
+function placeJug(j: GoldJug, x: number, z: number) {
+  j.x = x;
+  j.z = z;
+  j.active = true;
+  j.group.visible = true;
+  j.group.position.set(x, 0, z);
+}
+
+// battle royale: a safe circle that shrinks, with a storm outside it
+const BR_PHASES = [
+  { r: 105, hold: 50, shrink: 30, dps: 3 },
+  { r: 70, hold: 40, shrink: 30, dps: 5 },
+  { r: 42, hold: 35, shrink: 25, dps: 8 },
+  { r: 22, hold: 30, shrink: 25, dps: 12 },
+  { r: 8, hold: 25, shrink: 25, dps: 18 },
+  { r: 2, hold: 15, shrink: 20, dps: 25 },
+];
+const br = { idx: 0, t: 0, shrinking: false, cx: 0, cz: 0, r: 160, fromR: 160, fromX: 0, fromZ: 0, toR: 105, toX: 0, toZ: 0, over: false, elimT: 0 };
+const stormWall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 90, 56, 1, true), new THREE.MeshBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+stormWall.position.y = 45;
+stormWall.visible = false;
+scene.add(stormWall);
+function brNextTarget() {
+  const ph = BR_PHASES[Math.min(br.idx, BR_PHASES.length - 1)];
+  const a = Math.random() * Math.PI * 2;
+  const d = Math.random() * Math.max(0, br.r - ph.r) * 0.8;
+  br.fromR = br.r;
+  br.fromX = br.cx;
+  br.fromZ = br.cz;
+  br.toR = ph.r;
+  br.toX = br.cx + Math.cos(a) * d;
+  br.toZ = br.cz + Math.sin(a) * d;
+}
+function brReset() {
+  br.idx = 0;
+  br.t = 0;
+  br.shrinking = false;
+  br.cx = br.cz = 0;
+  br.r = 160;
+  br.over = false;
+  br.elimT = 0;
+  brNextTarget();
+}
+const alive = (team: 0 | 1) => (team === 0 && player.alive ? 1 : 0) + fighters.filter((f) => f.team === team && f.alive).length;
+
+function setModeVisuals() {
+  const zonesOn = mode === 'zones';
+  for (const z of zones.list) z.disc.visible = z.beacon.visible = z.pillar.visible = zonesOn;
+  extractGroup.visible = mode === 'extract';
+  stormWall.visible = mode === 'royale';
+  potions.noRespawn = pickups.noRespawn = mode === 'royale';
+  Fighter.royale = mode === 'royale';
+  if (mode !== 'royale') Fighter.storm = null;
+}
+
+/** Everything that differs between the three modes, once per frame. */
+function updateMode(dt: number) {
+  elStorm.style.opacity = '0';
+  elObjective.style.display = mode === 'zones' ? 'none' : 'block';
+  Fighter.vip = mode === 'extract' && carrying && player.alive ? player : null;
+  player.speedMul = classOf(classId).speed * (carrying ? 0.85 : 1);
+  if (phase !== 'play') return;
+
+  if (mode === 'extract') {
+    extractT -= dt;
+    for (const j of goldJugs) {
+      if (!j.active) continue;
+      j.group.children[0].rotation.y += dt * 1.2;
+      if (!carrying && player.alive && Math.hypot(player.pos.x - j.x, player.pos.z - j.z) < 2.8) {
+        carrying = true;
+        j.active = false;
+        j.group.visible = false;
+        banner('GOLDEN JUG! CARRY IT TO THE EXTRACTION POINT', 3);
+        sound.powerUp();
+      }
+    }
+    const pad = extractPad.position;
+    if (carrying && player.alive && Math.hypot(player.pos.x - pad.x, player.pos.z - pad.z) < 11) {
+      carrying = false;
+      delivered++;
+      sound.horn(true);
+      if (delivered >= JUGS_NEEDED) endMatch(true, 'EXTRACTION COMPLETE! THE JUGS ARE HOME!');
+      else banner(`JUG EXTRACTED! ${delivered} OF ${JUGS_NEEDED}`, 2.5);
+    }
+    if (extractT <= 0) endMatch(false, 'EXTRACTION FAILED: OUT OF TIME');
+    const left = Math.max(0, extractT);
+    const target = carrying ? pad : goldJugs.filter((j) => j.active).sort((a, b) => Math.hypot(a.x - player.pos.x, a.z - player.pos.z) - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
+    const tx = target ? ('x' in target ? target.x : 0) : pad.x;
+    const tz = target ? ('z' in target ? target.z : 0) : pad.z;
+    const dist = Math.round(Math.hypot(tx - player.pos.x, tz - player.pos.z));
+    elObjective.textContent = `EXTRACTION ${delivered}/${JUGS_NEEDED}  ·  ${carrying ? 'GET TO THE EXTRACTION POINT' : 'FIND A GOLDEN JUG'}  ·  ${dist} m  ·  ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+  }
+
+  if (mode === 'royale') {
+    br.t += dt;
+    const ph = BR_PHASES[Math.min(br.idx, BR_PHASES.length - 1)];
+    if (!br.shrinking) {
+      if (br.t >= ph.hold) { br.shrinking = true; br.t = 0; banner('THE STORM IS CLOSING IN!', 2.5); sound.horn(false); }
+    } else {
+      const f = Math.min(1, br.t / ph.shrink);
+      br.r = br.fromR + (br.toR - br.fromR) * f;
+      br.cx = br.fromX + (br.toX - br.fromX) * f;
+      br.cz = br.fromZ + (br.toZ - br.fromZ) * f;
+      if (f >= 1) {
+        br.idx = Math.min(br.idx + 1, BR_PHASES.length - 1);
+        br.shrinking = false;
+        br.t = 0;
+        if (br.toR > BR_PHASES[BR_PHASES.length - 1].r) brNextTarget();
+        else { br.fromR = br.r; br.toR = br.r; }
+      }
+    }
+    Fighter.storm = { cx: br.cx, cz: br.cz, r: br.r };
+    stormWall.position.x = br.cx;
+    stormWall.position.z = br.cz;
+    stormWall.scale.set(br.r, 1, br.r);
+    (stormWall.material as THREE.MeshBasicMaterial).opacity = 0.18 + 0.06 * Math.sin(performance.now() / 300);
+    // everyone outside the circle is in the storm
+    for (const c of everyone) {
+      if (!c.alive) continue;
+      if (Math.hypot(c.pos.x - br.cx, c.pos.z - br.cz) > br.r) c.dot(ph.dps * dt, 'poison', null);
+    }
+    const out = player.alive && Math.hypot(player.pos.x - br.cx, player.pos.z - br.cz) > br.r;
+    if (out) elStorm.style.opacity = String(0.55 + 0.25 * Math.sin(performance.now() / 150));
+    const a = alive(0);
+    const b = alive(1);
+    if (!player.alive && !br.over) {
+      br.over = true;
+      br.elimT = 4;
+    }
+    if (br.over && !player.alive) {
+      br.elimT -= dt;
+      if (br.elimT <= 0) endMatch(false, `ELIMINATED! ${a + b} LEFT STANDING`);
+    }
+    if (b === 0) endMatch(true, 'WINNER WINNER! LAST TEAM STANDING!');
+    else if (a === 0) endMatch(false, 'YOUR TEAM WAS WIPED OUT');
+    const left = Math.max(0, (br.shrinking ? ph.shrink : ph.hold) - br.t);
+    elObjective.textContent = `STORM ${br.shrinking ? 'CLOSING' : 'HOLDS'}  ·  ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}  ·  RADIUS ${Math.round(br.r)} m  ·  ${a} v ${b} ALIVE`;
+  }
+}
+
+function scatterAll() {
+  const drop = (): THREE.Vector3 => nav.randomFreePoint(HALF - 12);
+  player.respawn(drop(), Math.random() * Math.PI * 2);
+  applyPlayerClass();
+  const count: [number, number] = [1, 0]; // 25 a side, the player being one of the first team
+  for (const f of fighters) {
+    if (count[f.team] >= 25) { // the rest sit this one out
+      f.alive = false;
+      f.group.visible = false;
+      continue;
+    }
+    count[f.team]++;
+    f.spawn(drop(), Math.random() * Math.PI * 2);
+  }
+}
+
 function newMatch() {
+  Fighter.royale = mode === 'royale'; // set before anyone spawns
   tickets = [START_TICKETS, START_TICKETS];
   bleedT = 5;
   kills = 0;
@@ -529,7 +744,23 @@ function newMatch() {
   for (const f of fighters) f.spawn(f.team === 0 ? south[si++ % south.length] : north[ni++ % north.length], f.team === 0 ? 0 : Math.PI);
   playerWasAlive = true;
   respawnT = 0;
-  banner('CAPTURE THE ZONES! HOLD MORE THAN THE ENEMY!', 3);
+  setModeVisuals();
+  delivered = 0;
+  carrying = false;
+  extractT = EXTRACT_TIME;
+  brReset();
+  if (mode === 'extract') {
+    const spots = shuffled(forest.zones.slice(1, 6));
+    goldJugs.forEach((j, i) => {
+      const z = spots[i];
+      const p = freeNear(z.x + (Math.random() - 0.5) * 8, z.z + (Math.random() - 0.5) * 8);
+      placeJug(j, p.x, p.z);
+    });
+  } else {
+    for (const j of goldJugs) { j.active = false; j.group.visible = false; }
+  }
+  if (mode === 'royale') scatterAll();
+  banner(mode === 'zones' ? 'CAPTURE THE ZONES! HOLD MORE THAN THE ENEMY!' : mode === 'extract' ? 'EXTRACTION! FIND THE GOLDEN JUGS AND BRING THEM HOME!' : 'BATTLE ROYALE! LAST TEAM STANDING WINS!', 3.5);
   if (!firstMatch) setTimeout(() => announcer('start'), 1200);
 }
 
@@ -650,6 +881,7 @@ const fightCtx: FightCtx = {
   world, nav, grid, pee, zones, potions, mounts, weapons, pickups, fx, time: 0, viewer: camera.position,
   onKill: (victim, from, kind) => registerKill(victim, from, kind),
   respawn: (f) => {
+    if (mode === 'royale') return; // no second chances
     const r = respawnPoint(f.team);
     f.spawn(r.pos, r.yaw);
   },
@@ -677,6 +909,7 @@ zones.onCapture = (z: Zone, owner) => {
 };
 
 const blastBuf: Combatant[] = [];
+const tmp3 = new THREE.Vector3();
 
 weapons.onExplode = (pos, blast: BlastSpec, kind, shooter, rocket) => {
   const col = PEE[kind].color;
@@ -733,6 +966,8 @@ function giveWeapon(type: PickupType) {
   if (type === 'health') player.heal(amount);
   else if (type === 'armor') player.armor = Math.min(100, player.armor + amount);
   else if (type === 'double' || type === 'swirl') player.mods[type] = amount;
+  else if (type === 'mine') mines = Math.min(8, mines + amount);
+  else if (type === 'jetpack') { player.jetTime = amount; player.fuel = 10; }
   else if (type === 'jug') jugs = Math.min(6, jugs + amount);
   else if (type === 'sniper') { ammoSniper += amount; weapon = 'sniper'; }
   else { ammoLauncher += amount; weapon = 'launcher'; }
@@ -807,6 +1042,14 @@ function cycleWeapon() {
 
 const wDir = new THREE.Vector3();
 const wOrigin = new THREE.Vector3();
+function placePlayerMine() {
+  if (mines <= 0 || !player.alive || !locked || player.mount || !player.onGround) return;
+  weapons.placeMine(player, player.pos.x, player.pos.z, player.potion?.kind ?? 'normal');
+  mines--;
+  sound.squelch(0.6, 0);
+  banner(mines ? `MINE PLANTED (${mines} LEFT)` : 'MINE PLANTED (THAT WAS THE LAST)', 1);
+}
+
 function throwPlayerJug() {
   if (jugs <= 0 || jugCd > 0 || !player.alive || !locked || player.status.frozen > 0) return;
   camera.updateMatrixWorld();
@@ -907,24 +1150,13 @@ $('btn-voices').addEventListener('click', toggleVoices);
   refreshAudioUi();
 }
 
-const GFX = ['ps2', 'ascii', 'hd'] as const;
-const GFX_NAMES = { ps2: 'PLAYSTATION 2', ascii: 'ASCII', hd: 'HD' };
 function refreshOptions() {
-  for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card')) {
-    el.classList.toggle('selected', el.dataset.g ? el.dataset.g === trip.style : el.dataset.m === MAP);
-  }
+  for (const el of document.querySelectorAll<HTMLElement>('.map-card')) el.classList.toggle('selected', el.dataset.m === MAP);
 }
-function setGfx(g: (typeof GFX)[number], announce = true) {
-  trip.style = g;
-  try { localStorage.setItem('pg-gfx', g); } catch { /* ignore */ }
-  refreshOptions();
-  if (announce) banner(`GRAPHICS: ${GFX_NAMES[g]}`, 1.2);
-}
-for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card')) {
+for (const el of document.querySelectorAll<HTMLElement>('.map-card')) {
   el.addEventListener('click', (e) => {
     e.stopPropagation(); // choosing an option should not start the game
-    if (el.dataset.g) setGfx(el.dataset.g as (typeof GFX)[number], false);
-    else if (el.dataset.m && el.dataset.m !== MAP) {
+    if (el.dataset.m && el.dataset.m !== MAP) {
       try { localStorage.setItem('pg-map', el.dataset.m); } catch { /* ignore */ }
       const u = new URL(location.href);
       u.searchParams.set('map', el.dataset.m);
@@ -932,13 +1164,7 @@ for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card'))
     }
   });
 }
-{
-  let g: (typeof GFX)[number] = 'ps2';
-  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'ascii' || s === 'hd') g = s; } catch { /* ignore */ }
-  const q = new URLSearchParams(location.search).get('gfx');
-  if (q === 'ps2' || q === 'ascii' || q === 'hd') g = q;
-  setGfx(g, false);
-}
+refreshOptions();
 
 function toggleRide() {
   if (!player.alive || !locked) return;
@@ -963,6 +1189,7 @@ function toggleRide() {
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
   if (e.code === 'KeyG' && !e.repeat) throwPlayerJug();
+  if (e.code === 'KeyX' && !e.repeat) placePlayerMine();
   if (e.code === 'KeyR' && !e.repeat) useReward();
   if (e.code === 'KeyI' && !e.repeat) {
     player.god = !player.god;
@@ -974,7 +1201,6 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyQ' && !e.repeat) cycleWeapon();
   if (e.code === 'KeyV' && !e.repeat && locked && player.alive) playerSay('shout', 2);
   if (e.code === 'KeyF' && !e.repeat) toggleThermal();
-  if (e.code === 'KeyH') setGfx(GFX[(GFX.indexOf(trip.style) + 1) % GFX.length]);
   if (e.code === 'KeyN') toggleMusic();
   if (e.code === 'KeyM') toggleVoices();
 });
@@ -1054,6 +1280,7 @@ function renderLobby() {
   if (c.sniper) items.push(`Piss Sniper x${c.sniper}`);
   if (c.launcher) items.push(`Piss Launcher x${c.launcher}`);
   if (c.jugs) items.push(`Piss Jugs x${c.jugs}`);
+  if (c.mines) items.push(`Piss Mines x${c.mines} (X)`);
   if (c.double) items.push(`Double Stream (${c.double}s)`);
   if (c.swirl) items.push(`Swirl Stream (${c.swirl}s)`);
   if (c.armor) items.push(`Armour ${c.armor}`);
@@ -1063,7 +1290,7 @@ function renderLobby() {
     bar('HEALTH', c.hp, 130, String(c.hp)) + bar('ARMOUR', c.armor, 60, String(c.armor)) + bar('SPEED', c.speed, 1.25, `${Math.round(c.speed * 100)}%`) +
     `<ul class="loadout-list">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
   $('match-info').innerHTML =
-    `<div><span>MAP</span><b>${MAP_NAMES[MAP]}</b></div><div><span>MODE</span><b>CAPTURE THE ZONES</b></div><div><span>PLAYERS</span><b>50 v 50</b></div><div><span>ENEMY HEALTH</span><b>50%</b></div>`;
+    `<div><span>MAP</span><b>${MAP_NAMES[MAP]}</b></div><div><span>MODE</span><b>${MODE_NAMES[mode]}</b></div><div><span>PLAYERS</span><b>50 v 50</b></div><div><span>ENEMY HEALTH</span><b>50%</b></div>`;
 }
 
 $('classrow').innerHTML = CLASSES.map((c) => `<div class="class-card" data-c="${c.id}"><span class="badge" style="background:${c.colour}">${c.badge}</span><div><b>${c.name}</b><small>${c.tag}</small></div></div>`).join('');
@@ -1074,6 +1301,16 @@ for (const el of document.querySelectorAll<HTMLElement>('.class-card')) {
     if (firstMatch) applyPlayerClass(); // not deployed yet: issue it straight away
     renderLobby();
   });
+}
+for (const el of document.querySelectorAll<HTMLElement>('.mode-card')) {
+  el.addEventListener('click', () => {
+    mode = el.dataset.mo as Mode;
+    try { localStorage.setItem('pg-mode', mode); } catch { /* ignore */ }
+    for (const o of document.querySelectorAll<HTMLElement>('.mode-card')) o.classList.toggle('selected', o === el);
+    newMatch(); // start the new mode straight away
+    renderLobby();
+  });
+  el.classList.toggle('selected', el.dataset.mo === mode);
 }
 for (const b of document.querySelectorAll<HTMLElement>('#lb-tabs button')) {
   b.addEventListener('click', () => {
@@ -1159,10 +1396,12 @@ const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
 function renderHud() {
   const f0 = FACTION_INFO[faction];
   const f1 = FACTION_INFO[otherFaction(faction)];
-  elTix.innerHTML =
+  if (mode === 'royale') {
+    elTix.innerHTML = `<span style="color:${f0.color}">${f0.label} ${alive(0)} ALIVE</span> <span style="opacity:.6">:</span> <span style="color:${f1.color}">${alive(1)} ALIVE ${f1.label}</span>`;
+  } else elTix.innerHTML =
     `<span style="color:${f0.color}">${f0.label} ${tickets[0]}</span> <span style="opacity:.6">:</span> ` +
     `<span style="color:${f1.color}">${tickets[1]} ${f1.label}</span>`;
-  elZoneBar.innerHTML = zones.list
+  elZoneBar.innerHTML = mode !== 'zones' ? '' : zones.list
     .map((z) => {
       const c = z.owner === 0 ? f0.color : z.owner === 1 ? f1.color : '#999';
       return `<div class="pip${z.contested ? ' contested' : ''}" style="background:${c}" title="${z.name}"></div>`;
@@ -1183,7 +1422,8 @@ function renderHud() {
   elStreak.textContent = (rewards.length ? `READY: ${rewards.map((r) => REWARD_INFO[r].name).join(', ')} (R)   ` : '') + (streak > 0 ? `Streak ${streak}${nextAt ? ` → ${nextAt}` : ''}` : '');
   const wname = weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? `Piss Sniper ×${ammoSniper}` : `Piss Launcher ×${ammoLauncher}`;
   const thermalTxt = thermalOn ? '  THERMAL ON (F)' : classOf(classId).thermal ? '  F: thermal' : '';
-  elWeapon.textContent = `[${wname}]${thermalTxt}${jugs ? `  Jugs ×${jugs} (G)` : ''}${ammoSniper && weapon !== 'sniper' ? '  2: sniper' : ''}${ammoLauncher && weapon !== 'launcher' ? '  3: launcher' : ''}`;
+  const jetTxt = player.jetTime > 0 ? `  JETPACK ${Math.ceil(player.jetTime)}s ${'▮'.repeat(Math.ceil(player.fuel / 2))}${'▯'.repeat(5 - Math.ceil(player.fuel / 2))}` : '';
+  elWeapon.textContent = `[${wname}]${thermalTxt}${mines ? `  Mines x${mines} (X)` : ''}${jetTxt}${jugs ? `  Jugs ×${jugs} (G)` : ''}${ammoSniper && weapon !== 'sniper' ? '  2: sniper' : ''}${ammoLauncher && weapon !== 'launcher' ? '  3: launcher' : ''}`;
   if (player.mount) {
     const m = player.mount;
     elMount.style.display = 'block';
@@ -1205,7 +1445,34 @@ function renderHud() {
   miniCtx.clearRect(0, 0, mini.width, mini.height);
   miniCtx.fillStyle = 'rgba(20,50,40,0.7)';
   miniCtx.fillRect(0, 0, mini.width, mini.height);
-  for (const z of zones.list) {
+  if (mode === 'royale') {
+    miniCtx.strokeStyle = '#ffffff';
+    miniCtx.lineWidth = 2;
+    miniCtx.beginPath();
+    miniCtx.arc(mx(br.cx), mz(br.cz), br.r * s, 0, Math.PI * 2);
+    miniCtx.stroke();
+    if (!br.shrinking && br.toR < br.r) {
+      miniCtx.strokeStyle = '#ff4dd0';
+      miniCtx.setLineDash([4, 4]);
+      miniCtx.beginPath();
+      miniCtx.arc(mx(br.toX), mz(br.toZ), br.toR * s, 0, Math.PI * 2);
+      miniCtx.stroke();
+      miniCtx.setLineDash([]);
+    }
+  }
+  if (mode === 'extract') {
+    for (const j of goldJugs) {
+      if (!j.active) continue;
+      miniCtx.fillStyle = '#ffd040';
+      miniCtx.fillRect(mx(j.x) - 3, mz(j.z) - 3, 6, 6);
+    }
+    miniCtx.strokeStyle = '#19e3ff';
+    miniCtx.lineWidth = 2;
+    miniCtx.beginPath();
+    miniCtx.arc(mx(extractPad.position.x), mz(extractPad.position.z), 11 * s, 0, Math.PI * 2);
+    miniCtx.stroke();
+  }
+  for (const z of mode === 'zones' ? zones.list : []) {
     const c = z.owner === 0 ? f0.color : z.owner === 1 ? f1.color : '#aaaaaa';
     miniCtx.beginPath();
     miniCtx.arc(mx(z.x), mz(z.z), z.radius * s, 0, Math.PI * 2);
@@ -1449,6 +1716,9 @@ function simulate(dt: number) {
     }
   });
   mounts.update(dt, time);
+  // jet pack flames and the roar
+  sound.jet(player.jetting && player.alive);
+  if (player.jetting && player.alive) fx.burst(tmp3.set(player.pos.x, player.pos.y + 0.15, player.pos.z), 0xffa030, 2, 3, 1.1);
   movementSounds(dt);
   pee.update(dt, {
     world, grid, fx,
@@ -1463,13 +1733,19 @@ function simulate(dt: number) {
       fighterSay(who, p.kind as SayCtx);
     }
   });
-  zones.update(dt, everyone, time);
+  if (mode === 'zones') zones.update(dt, everyone, time);
+  updateMode(dt);
   fx.update(dt);
   forest.animate(time);
 
   // the player dying
   if (playerWasAlive && !player.alive) {
     deaths++;
+    if (carrying) { // the jug stays where you fell
+      carrying = false;
+      const j = goldJugs.find((q) => !q.active);
+      if (j) placeJug(j, player.pos.x, player.pos.z);
+    }
     mounts.dismount(player);
     sound.cannon(false);
     setThermal(false);
@@ -1481,7 +1757,7 @@ function simulate(dt: number) {
     else banner(pick(['YOU WERE DRENCHED', 'WELL, THAT STINGS', 'RIP. THE FOREST IS UNIMPRESSED', 'SPLOOSH. YOU ARE DONE']), 2.2);
   }
   playerWasAlive = player.alive;
-  if (!player.alive && phase === 'play') {
+  if (!player.alive && phase === 'play' && mode !== 'royale') {
     respawnT -= dt;
     if (respawnT <= 0) {
       const r = respawnPoint(0);
@@ -1495,15 +1771,15 @@ function simulate(dt: number) {
   // zones drain the losing side's tickets
   if (phase === 'play') {
     bleedT -= dt;
-    if (bleedT <= 0) {
+    if (bleedT <= 0 && mode === 'zones') {
       bleedT = 5;
       const [a, b] = zones.owned();
       if (a > b) tickets[1] = Math.max(0, tickets[1] - (a - b));
       else if (b > a) tickets[0] = Math.max(0, tickets[0] - (b - a));
     }
-    if (!warned50 && Math.min(tickets[0], tickets[1]) <= 50) { warned50 = true; announcer('low50'); }
+    if (mode !== 'royale' && !warned50 && Math.min(tickets[0], tickets[1]) <= 50) { warned50 = true; announcer('low50'); }
     if (!warned20 && Math.min(tickets[0], tickets[1]) <= 20) { warned20 = true; announcer('low20'); }
-    if (tickets[0] <= 0 || tickets[1] <= 0) {
+    if (mode !== 'royale' && (tickets[0] <= 0 || tickets[1] <= 0)) {
       phase = 'end';
       phaseT = 9;
       const won = tickets[1] <= 0;
@@ -1591,7 +1867,7 @@ function tick() {
   }
 
   sound.setListener(camera.position.x, camera.position.z, camera.rotation.y, camera.position.y);
-  markers.update(everyone, camera.position, vt, (c) => (c instanceof Fighter && c.mount ? c.mount.def.lift : 0) + (Fighter.size - 1) * 1.4, trip.ink > 0 ? 1 : renderer.domElement.height / 480);
+  markers.update(everyone, camera.position, vt, (c) => (c instanceof Fighter && c.mount ? c.mount.def.lift : 0) + (Fighter.size - 1) * 1.4, renderer.domElement.height / 480);
   trip.render(scene, camera, vt, ampNow * (thermalOn ? 0.2 : MAP === 'desert' ? 0.7 : 1), beat, tintNow);
 }
 
@@ -1608,6 +1884,7 @@ if (touchMode) {
     shout: () => { if (locked && player.alive) playerSay('shout', 2); },
     streak: useReward,
     thermal: toggleThermal,
+    mine: placePlayerMine,
     music: () => toggleMusic(),
     pause: () => { fallback = false; setRunning(false); },
     status: () => ({
@@ -1634,7 +1911,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, derek, chris, placeNpcs, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
+  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, getMode: () => mode, setMode: (m: Mode) => { mode = m; newMatch(); }, br, goldJugs, extractPad, derek, chris, placeNpcs, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   applyPlayerClass, setClass: (id: string) => { classId = id; applyPlayerClass(); renderLobby(); }, get classId() { return classId; },

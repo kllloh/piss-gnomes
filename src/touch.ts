@@ -15,6 +15,7 @@ export interface TouchApi {
   streak(): void;
   thermal(): void;
   music(): void;
+  mine(): void;
   pause(): void;
   /** What the buttons should say right now. */
   status(): { weapon: string; jugs: number; sniper: boolean; riding: boolean; canRide: boolean; running: boolean; reward: string; hasThermal: boolean; thermalOn: boolean; musicOn: boolean };
@@ -39,6 +40,7 @@ body.touch #tickets { top: 4px; padding: 3px 12px; font-size: 16px; }
 body.touch .pip { width: 11px; height: 11px; }
 body.touch #chatter { bottom: 70px; font-size: 14px; max-width: 80vw; }
 body.touch #mountinfo { left: 50%; transform: translateX(-50%); bottom: 96px; width: 220px; font-size: 12px; }
+body.touch #objective { top: 62px; font-size: 11px; }
 body.touch #banner { font-size: 22px; top: 16%; }
 body.touch #prompt { top: 56%; font-size: 15px; }
 body.touch #overlay h1 { font-size: 40px; }
@@ -59,6 +61,7 @@ body.touch.playing #t-zoom.show { display: flex !important; }
 body.touch.playing #t-thermal.show { display: flex !important; }
 #t-shout { right: 8px; top: 124px; width: 10vmin; height: 10vmin; min-width: 40px; min-height: 40px; }
 #t-music { left: 8px; top: 62px; width: 8vmin; height: 8vmin; min-width: 36px; min-height: 36px; font-size: 14px; }
+#t-mine { right: 41vmin; bottom: 4vmin; width: 11vmin; height: 11vmin; border-color: #ff5a30; }
 #t-pause { left: 8px; top: 8px; width: 9vmin; height: 9vmin; min-width: 36px; min-height: 36px; }
 #t-stick { position: fixed; z-index: 6; display: none; width: 26vmin; height: 26vmin; border-radius: 50%; border: 2px solid rgba(25,227,255,.7); background: rgba(8,6,28,.3); pointer-events: none; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(25,227,255,.5); }
 #t-knob { position: absolute; left: 50%; top: 50%; width: 11vmin; height: 11vmin; margin: -5.5vmin 0 0 -5.5vmin; border-radius: 50%; background: rgba(255,43,214,.55); box-shadow: 0 0 10px #ff2bd6; }
@@ -212,6 +215,7 @@ export function initTouch(api: TouchApi) {
   const thermal = mk('t-thermal', 'THERMAL');
   const pause = mk('t-pause', 'II');
   const music = mk('t-music', '♪');
+  const mineBtn = mk('t-mine', 'MINE');
   hold(fire, api.fire, true);
   hold(jump, api.jump);
   hold(zoom, api.zoom);
@@ -223,6 +227,7 @@ export function initTouch(api: TouchApi) {
   tap(thermal, api.thermal);
   tap(pause, api.pause);
   tap(music, api.music);
+  tap(mineBtn, api.mine);
 
   // keep the labels honest
   setInterval(() => {
