@@ -9,7 +9,7 @@ const SCALE_XZ = 2.1; // twice the size he was: still tall and thin (4.2 tall ag
 const SCALE_Y = 4.2;
 const HW = 0.9;
 const H = 6.2;
-const SPEED = 2.4;
+const SPEED = 3.0;
 const GREET_DIST = 14;
 
 /** Rory. Big, blond, bowl-cut, friendly and completely unkillable. */

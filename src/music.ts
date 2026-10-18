@@ -30,6 +30,7 @@ export type MusicStyle = 'trip' | 'acid' | 'stoner';
 
 export class Music {
   on = true;
+  private vol = 0.5; // the player's volume slider, 0..1
   private style: MusicStyle = 'trip';
   private echo: DelayNode | null = null;
   private droneOut: GainNode | null = null;
@@ -70,7 +71,7 @@ export class Music {
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 
     this.out = ctx.createGain();
-    this.out.gain.value = this.on ? 0.3 : 0;
+    this.out.gain.value = this.level();
     const comp = ctx.createDynamicsCompressor();
     this.out.connect(comp).connect(ctx.destination);
 
@@ -153,9 +154,19 @@ export class Music {
     }
   }
 
+  /** Master level: much quieter than it used to be, and scaled by the volume slider. */
+  private level(): number {
+    return this.on ? 0.2 * this.vol : 0;
+  }
+
   setEnabled(on: boolean) {
     this.on = on;
-    if (this.ctx && this.out) this.out.gain.setTargetAtTime(on ? 0.3 : 0, this.ctx.currentTime, 0.15);
+    if (this.ctx && this.out) this.out.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.15);
+  }
+
+  setVolume(v: number) {
+    this.vol = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.out) this.out.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.1);
   }
 
   /** 0..1: how wild things are (fighting, riding, a potion in your system). */

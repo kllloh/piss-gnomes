@@ -19,6 +19,7 @@ import { Music } from './music';
 import { Trip } from './trip';
 import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } from './talk';
 import { Rory } from './rory';
+import { Chris } from './chris';
 import { initTouch, isTouchDevice } from './touch';
 import { Streaks, REWARD_INFO, type Reward } from './streaks';
 import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, type PickupType, type BlastSpec } from './weapons';
@@ -140,6 +141,36 @@ const mountSpots: MountSpot[] = [];
   for (const z of forest.zones) for (let i = 0; i < 2; i++) mountSpots.push({ type: types[n++ % 3], pos: clear(z.x + (i ? 9 : -9), z.z + (i ? -6 : 6)) });
 }
 const mounts = new Mounts(scene, mountSpots);
+
+// Chris: a big black cat who follows Rory about and farts health gas
+const chris = new Chris(scene, world, fx);
+chris.onFart = (x, z) => {
+  const sp = sound.spatial(x, z);
+  sound.fart(Math.min(1, sp.vol * 1.6), sp.pan);
+  const d = Math.hypot(x - player.pos.x, z - player.pos.z);
+  if (d < 45) {
+    banner('CHRIS FARTED: HEALTH GAS! STAND IN IT', 2.4);
+    sound.onSpeak?.('Chris', '*prrrrrp*', 'gnome');
+  }
+};
+chris.onMeow = () => {
+  const sp = sound.spatial(chris.pos.x, chris.pos.z, 1.5);
+  sound.meow(sp.vol, sp.pan);
+};
+
+/** Rory and Chris start each match somewhere out in the forest, well away from both bases. */
+function placeNpcs() {
+  let at: THREE.Vector3 | null = null;
+  for (let k = 0; k < 80 && !at; k++) {
+    const p = nav.randomFreePoint(HALF - 20);
+    if (Math.hypot(p.x - forest.baseSouth.x, p.z - forest.baseSouth.z) > 75 && Math.hypot(p.x - forest.baseNorth.x, p.z - forest.baseNorth.z) > 45) at = p;
+  }
+  at = at ?? new THREE.Vector3(30, 0, -10);
+  rory.spawn(at);
+  let cat = new THREE.Vector3(at.x + 7, 0, at.z + 6);
+  for (let k = 0; k < 12 && !nav.isFreeAt(cat.x, cat.z); k++) cat = new THREE.Vector3(at.x + (Math.random() - 0.5) * 18, 0, at.z + (Math.random() - 0.5) * 18);
+  chris.spawn(cat);
+}
 
 // weapons: thrown jugs, launched pee-balls, sniper beams, and crates of them to find
 const weapons = new Weapons(scene, world, grid);
@@ -285,6 +316,7 @@ function buildFighters() {
   everyone = [player, ...fighters];
   weapons.everyone = () => everyone;
 }
+
 
 // --- talking ---------------------------------------------------------------------------------------
 let chatterT = 0;
@@ -437,6 +469,7 @@ function newMatch() {
   kills = 0;
   deaths = 0;
   phase = 'play';
+  placeNpcs();
   endChaos();
   resetWeapons();
   weapons.clear();
@@ -801,8 +834,46 @@ renderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0) f
 window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) zooming = false; });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousemove', (e) => { if (locked) player.look(e.movementX, e.movementY); });
-const GFX = ['ps2', 'toon', 'hd'] as const;
-const GFX_NAMES = { ps2: 'PLAYSTATION 2', toon: 'CARTOON', hd: 'HD' };
+function refreshAudioUi() {
+  $('btn-music').textContent = `MUSIC: ${music.on ? 'ON' : 'OFF'}`;
+  $('btn-music').classList.toggle('selected', music.on);
+  $('btn-voices').textContent = `VOICES: ${sound.tauntsOn ? 'ON' : 'OFF'}`;
+  $('btn-voices').classList.toggle('selected', sound.tauntsOn);
+}
+function toggleMusic(announce = true) {
+  music.setEnabled(!music.on);
+  try { localStorage.setItem('pg-music', music.on ? '1' : '0'); } catch { /* ignore */ }
+  refreshAudioUi();
+  if (announce) banner(music.on ? 'MUSIC ON' : 'MUSIC OFF', 1);
+}
+function toggleVoices() {
+  sound.tauntsOn = !sound.tauntsOn;
+  if (!sound.tauntsOn) sound.stopTaunts();
+  refreshAudioUi();
+  banner(sound.tauntsOn ? 'VOICES ON' : 'VOICES OFF', 1);
+}
+$('btn-music').addEventListener('click', () => toggleMusic(false));
+$('btn-voices').addEventListener('click', toggleVoices);
+{
+  const slider = $('music-vol') as HTMLInputElement;
+  let v = 50;
+  try {
+    const sv = localStorage.getItem('pg-musicvol');
+    if (sv !== null) v = Math.max(0, Math.min(100, Number(sv)));
+    if (localStorage.getItem('pg-music') === '0') music.setEnabled(false);
+  } catch { /* ignore */ }
+  slider.value = String(v);
+  music.setVolume(v / 100);
+  slider.addEventListener('input', () => {
+    music.setVolume(Number(slider.value) / 100);
+    try { localStorage.setItem('pg-musicvol', slider.value); } catch { /* ignore */ }
+  });
+  slider.addEventListener('click', (e) => e.stopPropagation());
+  refreshAudioUi();
+}
+
+const GFX = ['ps2', 'ascii', 'hd'] as const;
+const GFX_NAMES = { ps2: 'PLAYSTATION 2', ascii: 'ASCII', hd: 'HD' };
 function refreshOptions() {
   for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card')) {
     el.classList.toggle('selected', el.dataset.g ? el.dataset.g === trip.style : el.dataset.m === MAP);
@@ -828,9 +899,9 @@ for (const el of document.querySelectorAll<HTMLElement>('.opt-card, .map-card'))
 }
 {
   let g: (typeof GFX)[number] = 'ps2';
-  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'toon' || s === 'hd') g = s; } catch { /* ignore */ }
+  try { const s = localStorage.getItem('pg-gfx'); if (s === 'ps2' || s === 'ascii' || s === 'hd') g = s; } catch { /* ignore */ }
   const q = new URLSearchParams(location.search).get('gfx');
-  if (q === 'ps2' || q === 'toon' || q === 'hd') g = q;
+  if (q === 'ps2' || q === 'ascii' || q === 'hd') g = q;
   setGfx(g, false);
 }
 
@@ -869,15 +940,8 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV' && !e.repeat && locked && player.alive) playerSay('shout', 2);
   if (e.code === 'KeyF' && !e.repeat) toggleThermal();
   if (e.code === 'KeyH') setGfx(GFX[(GFX.indexOf(trip.style) + 1) % GFX.length]);
-  if (e.code === 'KeyN') {
-    music.setEnabled(!music.on);
-    banner(music.on ? 'MUSIC ON' : 'MUSIC OFF', 1);
-  }
-  if (e.code === 'KeyM') {
-    sound.tauntsOn = !sound.tauntsOn;
-    if (!sound.tauntsOn) sound.stopTaunts();
-    banner(sound.tauntsOn ? 'VOICES ON' : 'VOICES OFF', 1);
-  }
+  if (e.code === 'KeyN') toggleMusic();
+  if (e.code === 'KeyM') toggleVoices();
 });
 let fallback = false;
 const touchMode = isTouchDevice();
@@ -1126,6 +1190,19 @@ function renderHud() {
     miniCtx.fillStyle = '#' + PICKUP_INFO[p.type].color.toString(16).padStart(6, '0');
     miniCtx.fillRect(mx(p.pos.x) - 2, mz(p.pos.z) - 2, 4, 4);
   }
+  for (const g of chris.gas) {
+    miniCtx.fillStyle = 'rgba(125,255,154,0.35)';
+    miniCtx.beginPath();
+    miniCtx.arc(mx(g.x), mz(g.z), 6.5 * s, 0, Math.PI * 2);
+    miniCtx.fill();
+  }
+  miniCtx.fillStyle = '#111';
+  miniCtx.strokeStyle = '#7dff9a';
+  miniCtx.lineWidth = 1.5;
+  miniCtx.beginPath();
+  miniCtx.arc(mx(chris.pos.x), mz(chris.pos.z), 3.5, 0, Math.PI * 2);
+  miniCtx.fill();
+  miniCtx.stroke();
   miniCtx.fillStyle = '#ffd070';
   miniCtx.beginPath();
   miniCtx.arc(mx(rory.pos.x), mz(rory.pos.z), 6, 0, Math.PI * 2);
@@ -1283,6 +1360,7 @@ function simulate(dt: number) {
   grid.clear();
   for (const c of everyone) if (c.alive) grid.insert(c);
   grid.insert(rory);
+  grid.insert(chris);
 
   const hpBefore = player.hp;
   player.update(dt);
@@ -1300,6 +1378,7 @@ function simulate(dt: number) {
   for (const t of streaks.turrets) if (t.alive) grid.insert(t);
   streaks.update(dt);
   rory.update(dt, player);
+  chris.update(dt, rory, grid);
   weapons.update(dt);
   pickups.update(dt, time, grid, (p, who) => {
     const info = PICKUP_INFO[p.type];
@@ -1475,6 +1554,7 @@ if (touchMode) {
     shout: () => { if (locked && player.alive) playerSay('shout', 2); },
     streak: useReward,
     thermal: toggleThermal,
+    music: () => toggleMusic(),
     pause: () => { fallback = false; setRunning(false); },
     status: () => ({
       weapon: weapon === 'pee' ? 'Bladder' : weapon === 'sniper' ? 'Piss Sniper' : 'Piss Launcher',
@@ -1485,6 +1565,7 @@ if (touchMode) {
       running: locked,
       hasThermal: !!classOf(classId).thermal,
       thermalOn,
+      musicOn: music.on,
       reward: rewards.length ? (rewards[0] === 'turret' ? 'TURRET' : rewards[0] === 'airstrike' ? 'STRIKE' : 'NUKE') : '',
     }),
   });
@@ -1499,7 +1580,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
+  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, chris, placeNpcs, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   applyPlayerClass, setClass: (id: string) => { classId = id; applyPlayerClass(); renderLobby(); }, get classId() { return classId; },

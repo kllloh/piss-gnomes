@@ -768,6 +768,32 @@ export class Sound {
     src.stop(t + 4.1);
   }
 
+  /** A big cat's meow: a rising and falling wail. */
+  meow(vol: number, pan: number) {
+    if (!this.ctx || vol < 0.05) return;
+    const t = this.ctx.currentTime;
+    const o = this.out(0.3 * vol, pan);
+    if (!o) return;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(420, t);
+    osc.frequency.linearRampToValueAtTime(820, t + 0.18);
+    osc.frequency.linearRampToValueAtTime(560, t + 0.55);
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(900, t);
+    f.frequency.linearRampToValueAtTime(1800, t + 0.2);
+    f.frequency.linearRampToValueAtTime(1000, t + 0.55);
+    f.Q.value = 3;
+    const env = this.ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(1, t + 0.05);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    osc.connect(f).connect(env).connect(o.input);
+    osc.start(t);
+    osc.stop(t + 0.65);
+  }
+
   ignite() {
     this.burst(0.35, 3200, 0.35);
     this.tone(0.1, 120, 300, 0.3, 'sawtooth');

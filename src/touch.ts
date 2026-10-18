@@ -14,9 +14,10 @@ export interface TouchApi {
   shout(): void;
   streak(): void;
   thermal(): void;
+  music(): void;
   pause(): void;
   /** What the buttons should say right now. */
-  status(): { weapon: string; jugs: number; sniper: boolean; riding: boolean; canRide: boolean; running: boolean; reward: string; hasThermal: boolean; thermalOn: boolean };
+  status(): { weapon: string; jugs: number; sniper: boolean; riding: boolean; canRide: boolean; running: boolean; reward: string; hasThermal: boolean; thermalOn: boolean; musicOn: boolean };
 }
 
 export function isTouchDevice(): boolean {
@@ -57,6 +58,7 @@ body.touch.playing #t-zoom.show { display: flex !important; }
 #t-thermal { right: 40vmin; bottom: 28vmin; width: 12vmin; height: 12vmin; border-color: #ff9a30; display: none !important; }
 body.touch.playing #t-thermal.show { display: flex !important; }
 #t-shout { right: 8px; top: 124px; width: 10vmin; height: 10vmin; min-width: 40px; min-height: 40px; }
+#t-music { left: 8px; top: 62px; width: 8vmin; height: 8vmin; min-width: 36px; min-height: 36px; font-size: 14px; }
 #t-pause { left: 8px; top: 8px; width: 9vmin; height: 9vmin; min-width: 36px; min-height: 36px; }
 #t-stick { position: fixed; z-index: 6; display: none; width: 26vmin; height: 26vmin; border-radius: 50%; border: 2px solid rgba(25,227,255,.7); background: rgba(8,6,28,.3); pointer-events: none; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(25,227,255,.5); }
 #t-knob { position: absolute; left: 50%; top: 50%; width: 11vmin; height: 11vmin; margin: -5.5vmin 0 0 -5.5vmin; border-radius: 50%; background: rgba(255,43,214,.55); box-shadow: 0 0 10px #ff2bd6; }
@@ -209,6 +211,7 @@ export function initTouch(api: TouchApi) {
   const streak = mk('t-streak', 'STREAK');
   const thermal = mk('t-thermal', 'THERMAL');
   const pause = mk('t-pause', 'II');
+  const music = mk('t-music', '♪');
   hold(fire, api.fire, true);
   hold(jump, api.jump);
   hold(zoom, api.zoom);
@@ -219,6 +222,7 @@ export function initTouch(api: TouchApi) {
   tap(streak, api.streak);
   tap(thermal, api.thermal);
   tap(pause, api.pause);
+  tap(music, api.music);
 
   // keep the labels honest
   setInterval(() => {
@@ -232,6 +236,7 @@ export function initTouch(api: TouchApi) {
     zoom.classList.toggle('show', s.sniper);
     thermal.classList.toggle('show', s.hasThermal);
     thermal.classList.toggle('on', s.thermalOn);
+    music.style.opacity = s.musicOn ? '1' : '0.4';
     streak.innerHTML = s.reward ? 'USE<br>' + s.reward : 'STREAK';
     streak.style.opacity = s.reward ? '1' : '0.4';
   }, 150);

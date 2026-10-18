@@ -92,7 +92,8 @@ uniform float pulse;
 uniform float tint;
 uniform float ink;
 uniform float thermal;
-uniform float toon;
+uniform float ascii;
+uniform sampler2D font;
 uniform vec2 res;
 varying vec2 vUv;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -139,23 +140,27 @@ void main() {
     h = mix(h, vec3(1.0, 1.0, 0.75), smoothstep(0.7, 1.0, t));
     col = h * h; // the rest of the pipeline expects linear colour
   }
-  if (toon > 0.5) {
-    // CARTOON: bold clean ink lines, flat bands of colour and a comic-book halftone in the shadows
-    vec2 px = 1.6 / res;
-    vec3 cl = sqrt(max(texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb, 0.0));
-    vec3 cr = sqrt(max(texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb, 0.0));
-    vec3 cu = sqrt(max(texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb, 0.0));
-    vec3 cd = sqrt(max(texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb, 0.0));
-    float edge = smoothstep(0.34, 0.5, max(length(cr - cl), length(cu - cd)));
-    vec3 pc = sqrt(col);
-    float lm = dot(pc, vec3(0.299, 0.587, 0.114));
-    pc = mix(vec3(lm), pc, 1.35);
-    pc = floor(pc * 5.0 + 0.5) / 5.0;
-    vec2 hp = mod(gl_FragCoord.xy, 7.0) - 3.5;
-    float dots = step(length(hp), (0.45 - lm) * 9.0);
-    pc *= 1.0 - 0.35 * dots * step(lm, 0.45);
-    pc = mix(pc, vec3(0.03, 0.02, 0.06), edge);
-    col = pc * pc;
+  if (ascii > 0.5) {
+    // ASCII: the whole picture redrawn in coloured text, one character per cell, denser characters for brighter cells
+    const float N = 10.0;
+    vec2 cellPx = vec2(7.0, 13.0) * max(1.0, res.y / 800.0);
+    vec2 p = vUv * res;
+    vec2 id = floor(p / cellPx);
+    vec2 local = fract(p / cellPx);
+    vec2 cuv = (id + 0.5) * cellPx / res;
+    vec2 off = cellPx * 0.3 / res;
+    vec3 c = (texture2D(tDiffuse, cuv).rgb
+            + texture2D(tDiffuse, cuv + vec2(off.x, off.y)).rgb
+            + texture2D(tDiffuse, cuv + vec2(-off.x, off.y)).rgb
+            + texture2D(tDiffuse, cuv + vec2(off.x, -off.y)).rgb
+            + texture2D(tDiffuse, cuv + vec2(-off.x, -off.y)).rgb) * 0.2;
+    float l = sqrt(max(dot(c, vec3(0.299, 0.587, 0.114)), 0.0));
+    float idx = floor(clamp(pow(l, 1.8) * 1.25, 0.0, 0.999) * N);
+    float gl = texture2D(font, vec2((idx + local.x) / N, local.y)).r;
+    vec3 pc = sqrt(max(c, 0.0));
+    pc = mix(vec3(dot(pc, vec3(0.299, 0.587, 0.114))), pc, 1.5);
+    vec3 oc = pc * (0.07 + 1.25 * gl);
+    col = oc * oc;
   }
   if (ink > 0.0) {
     // --- PlayStation 2 look: low-res picture, a little bloom, saturated colour, 5-bit colour with an ordered dither ---
@@ -182,7 +187,7 @@ export class Trip {
   /** 0 = off, 1 = mild, 2 = full. */
   level = 2;
   private _theme: 'forest' | 'desert' | 'mush' = 'forest';
-  private _style: 'ps2' | 'toon' | 'hd' = 'ps2';
+  private _style: 'ps2' | 'ascii' | 'hd' = 'ps2';
   get theme() {
     return this._theme;
   }
@@ -193,10 +198,10 @@ export class Trip {
   get style() {
     return this._style;
   }
-  /** The graphics option: PlayStation 2, Cartoon, or plain HD. */
-  set style(v: 'ps2' | 'toon' | 'hd') {
+  /** The graphics option: PlayStation 2, ASCII, or plain HD. */
+  set style(v: 'ps2' | 'ascii' | 'hd') {
     this._style = v;
-    this.uniforms.toon.value = v === 'toon' ? 1 : 0;
+    this.uniforms.ascii.value = v === 'ascii' ? 1 : 0;
     this.ink = v === 'ps2' ? 1 : 0;
   }
   /** Thermal vision on/off. */
@@ -228,7 +233,8 @@ export class Trip {
     tint: { value: 0 },
     ink: { value: 1 },
     thermal: { value: 0 },
-    toon: { value: 0 },
+    ascii: { value: 0 },
+    font: { value: null as THREE.Texture | null },
     res: { value: new THREE.Vector2(1, 1) },
   };
   private sky: THREE.Mesh;
@@ -240,6 +246,27 @@ export class Trip {
   postOk = false;
 
   constructor(private renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
+    // the glyph strip for ASCII mode, darkest to brightest
+    {
+      const chars = ' .:-=+*#%@';
+      const cw = 16;
+      const ch = 32;
+      const c = document.createElement('canvas');
+      c.width = cw * chars.length;
+      c.height = ch;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, c.width, c.height);
+      g.fillStyle = '#fff';
+      g.font = 'bold 28px monospace';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      for (let i = 0; i < chars.length; i++) g.fillText(chars[i], i * cw + cw / 2, ch / 2 + 1);
+      const tex = new THREE.CanvasTexture(c);
+      tex.minFilter = tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      this.uniforms.font.value = tex;
+    }
     // sky dome that always sits on the camera
     this.sky = new THREE.Mesh(
       new THREE.SphereGeometry(90, 32, 16),
