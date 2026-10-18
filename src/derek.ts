@@ -27,7 +27,7 @@ function wrap(a: number): number {
   return a;
 }
 
-/** Derek: an old farmer with black hair on a giant ride-on mower. He cannot be stopped, and he mows down plants and gnomes alike. */
+/** Derek: an old farmer with black hair (clean shaven) on a giant ride-on mower. He cannot be stopped, and he mows down plants and gnomes alike. */
 export class Derek implements Combatant {
   readonly id = -4;
   readonly name = 'Derek';
@@ -156,11 +156,12 @@ export class Derek implements Combatant {
     for (const sx of [-1, 1]) { // arms out to the wheel
       const arm = new THREE.Group();
       arm.position.set(sx * 2.1, 4.6, -0.2);
-      arm.rotation.x = -1.05;
+      arm.rotation.x = 0.5; // upper arm angles forward and down
+      arm.rotation.z = -sx * 0.18; // and a little inward
       add(arm, shirt, 1.0, 2.6, 1.0, 0, -1.3, 0);
       const fore = new THREE.Group();
       fore.position.set(0, -2.6, 0);
-      fore.rotation.x = -0.6;
+      fore.rotation.x = 0.9; // forearm reaches forward to the steering wheel
       add(fore, skin, 0.9, 2.2, 0.9, 0, -1.1, 0);
       add(fore, skin, 1.0, 0.9, 1.0, 0, -2.4, 0); // hand
       arm.add(fore);
@@ -180,9 +181,7 @@ export class Derek implements Combatant {
       add(d, skin, 0.45, 0.9, 0.5, sx * 1.5, 6.3, 0); // ears
     }
     add(d, darkSkin, 0.7, 1.0, 0.8, 0, 6.2, -1.6); // big nose
-    add(d, grey, 2.0, 0.6, 0.6, 0, 5.55, -1.5); // grey walrus moustache
     add(d, lit({ color: 0x3a1010 }), 1.0, 0.6, 0.3, 0, 4.95, -1.4); // shouting mouth
-    add(d, grey, 1.2, 0.5, 0.3, 0, 4.45, -1.35); // stubble beard
     for (const y of [7.15, 6.95]) add(d, darkSkin, 1.9, 0.1, 0.1, 0, y + 0.0, -1.32); // forehead wrinkles
     for (const sx of [-1, 1]) add(d, darkSkin, 0.1, 0.9, 0.1, sx * 1.0, 5.6, -1.33); // laughter lines
 
