@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SoftBox, lit } from './organic';
-import { World } from './world';
+import { World, type AABB } from './world';
 import { makePaintTexture } from './organic';
 
 export const HALF = 110;
@@ -14,7 +14,30 @@ export interface ZoneDef {
   owner: 0 | 1 | -1;
 }
 
+/** Something Derek's mower can cut down: it hides its instances and removes its collider. */
+export interface Plant {
+  x: number;
+  z: number;
+  /** Debris colour when it goes. */
+  col: number;
+  alive: boolean;
+  mow(): void;
+}
+
+const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+export function hideInstance(m: THREE.InstancedMesh, i: number) {
+  m.setMatrixAt(i, ZERO);
+  m.instanceMatrix.needsUpdate = true;
+}
+export function killBox(c: AABB | undefined) {
+  if (c) {
+    c.min.set(1e5, 1e5, 1e5);
+    c.max.set(1e5 + 1, 1e5 + 1, 1e5 + 1);
+  }
+}
+
 export interface ForestInfo {
+  plants: Plant[];
   zones: ZoneDef[];
   baseSouth: THREE.Vector3; // team 0 spawns here
   baseNorth: THREE.Vector3; // team 1 spawns here
@@ -67,6 +90,7 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
   ];
   const baseSouth = new THREE.Vector3(0, 0, 97);
   const baseNorth = new THREE.Vector3(0, 0, -97);
+  const plants: Plant[] = [];
   const keepClear: { x: number; z: number; r: number }[] = [
     ...zones.map((z) => ({ x: z.x, z: z.z, r: z.radius + 6 })),
     { x: baseSouth.x, z: baseSouth.z, r: 22 },
@@ -141,7 +165,9 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
       const hh = 2.1 * t.s;
       put(canopy[l], i, t.x, t.h - 1.2 * t.s + l * 1.8 * t.s + hh / 2, t.z, width, hh, width, 0.3 * l, t.col);
     }
-    world.addCollider(new THREE.Vector3(t.x - t.w / 2, 0, t.z - t.w / 2), new THREE.Vector3(t.x + t.w / 2, t.h, t.z + t.w / 2));
+    const box = world.addCollider(new THREE.Vector3(t.x - t.w / 2, 0, t.z - t.w / 2), new THREE.Vector3(t.x + t.w / 2, t.h, t.z + t.w / 2));
+    const pl: Plant = { x: t.x, z: t.z, col: t.col, alive: true, mow() { pl.alive = false; hideInstance(trunks, i); for (const c of canopy) hideInstance(c, i); killBox(box); } };
+    plants.push(pl);
   });
   for (const m of [trunks, ...canopy]) {
     m.castShadow = true;
@@ -158,7 +184,10 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
     const z = between(-HALF + 4, HALF - 4);
     const s = between(0.7, 1.6);
     put(stems, i, x, 0.3 * s, z, 0.25 * s, 0.6 * s, 0.25 * s);
-    put(caps, i, x, 0.7 * s, z, 1.0 * s, 0.4 * s, 1.0 * s, rnd() * 3, pick([0xff66cc, 0x66ffee, 0xffee66, 0xa87aff, 0x7aff8a]));
+    const capCol = pick([0xff66cc, 0x66ffee, 0xffee66, 0xa87aff, 0x7aff8a]);
+    put(caps, i, x, 0.7 * s, z, 1.0 * s, 0.4 * s, 1.0 * s, rnd() * 3, capCol);
+    const pl: Plant = { x, z, col: capCol, alive: true, mow() { pl.alive = false; hideInstance(stems, i); hideInstance(caps, i); } };
+    plants.push(pl);
   }
   world.group.add(stems, caps);
 
@@ -193,7 +222,9 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
       const a = k * 2.1 + i;
       put(gSpots, i * 3 + k, g.x + Math.cos(a) * cw * 0.28, sh + 1.5 * g.s + 0.02, g.z + Math.sin(a) * cw * 0.28, 1.1 * g.s, 0.1, 1.1 * g.s);
     }
-    world.addCollider(new THREE.Vector3(g.x - sw / 2, 0, g.z - sw / 2), new THREE.Vector3(g.x + sw / 2, sh, g.z + sw / 2));
+    const box = world.addCollider(new THREE.Vector3(g.x - sw / 2, 0, g.z - sw / 2), new THREE.Vector3(g.x + sw / 2, sh, g.z + sw / 2));
+    const pl: Plant = { x: g.x, z: g.z, col: g.col, alive: true, mow() { pl.alive = false; hideInstance(gStem, i); hideInstance(gCap, i); for (let k = 0; k < 3; k++) hideInstance(gSpots, i * 3 + k); killBox(box); } };
+    plants.push(pl);
   });
   gCap.castShadow = true;
   world.group.add(gStem, gCap, gSpots);
@@ -330,7 +361,7 @@ export function buildForest(world: World, scene: THREE.Scene): ForestInfo {
   scene.add(world.group);
 
   return {
-    zones, baseSouth, baseNorth, spawnSouth, spawnNorth, flagsSouth, flagsNorth, potionSpots,
+    zones, baseSouth, baseNorth, spawnSouth, spawnNorth, flagsSouth, flagsNorth, potionSpots, plants,
     animate(t: number) {
       for (let i = 0; i < flyN; i++) {
         const f = flyBase[i];

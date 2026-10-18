@@ -20,6 +20,7 @@ import { Trip } from './trip';
 import { say as sayLine, announce, SAY_CHANCE, type SayCtx, type AnnounceCtx } from './talk';
 import { Rory } from './rory';
 import { Chris } from './chris';
+import { Derek } from './derek';
 import { initTouch, isTouchDevice } from './touch';
 import { Streaks, REWARD_INFO, type Reward } from './streaks';
 import { Weapons, WeaponPickups, PICKUP_INFO, SNIPER_DMG, type PickupType, type BlastSpec } from './weapons';
@@ -157,6 +158,37 @@ chris.onMeow = () => {
   const sp = sound.spatial(chris.pos.x, chris.pos.z, 1.5);
   sound.meow(sp.vol, sp.pan);
 };
+
+// Derek: a giant farmer on a ride-on mower, once per match
+const derek = new Derek(scene, fx);
+derek.plants = () => forest.plants;
+derek.onSay = (text) => {
+  const sp = sound.spatial(derek.pos.x, derek.pos.z, 8);
+  sound.taunt(text, Math.max(sp.vol, 0.55), sp.pan, 0.55, 'goblin', 5, 2, 'Derek');
+};
+let derekIn = 30 + Math.random() * 90;
+let mowCrunch = 0;
+derek.onMowPlant = (x, z) => {
+  if (mowCrunch > 0) return;
+  mowCrunch = 0.12;
+  const sp = sound.spatial(x, z);
+  sound.crash(sp.vol * 0.6, sp.pan);
+};
+derek.onMow = (c) => {
+  c.hurt(99999, 'normal', derek);
+  if (c.alive) c.hurt(99999, 'normal', derek); // a rider survives the bug being flattened, so go again
+};
+function derekArrives() {
+  // he drives in from a random edge
+  const side = Math.floor(Math.random() * 4);
+  const t = (Math.random() * 2 - 1) * (HALF - 20);
+  const edge = HALF + 14;
+  const [x, z] = side === 0 ? [-edge, t] : side === 1 ? [edge, t] : side === 2 ? [t, -edge] : [t, edge];
+  derek.spawn(x, z);
+  banner('DEREK IS ON HIS MOWER! RUN!', 3.5);
+  announcer('derek');
+  sound.horn(false);
+}
 
 /** Rory and Chris start each match somewhere out in the forest, well away from both bases. */
 function placeNpcs() {
@@ -470,6 +502,8 @@ function newMatch() {
   deaths = 0;
   phase = 'play';
   placeNpcs();
+  derek.reset();
+  derekIn = 30 + Math.random() * 90;
   endChaos();
   resetWeapons();
   weapons.clear();
@@ -583,8 +617,9 @@ const killVerbBy = (k: PeeKind) => PEE[k].verb;
 function registerKill(victim: Combatant, from: Combatant | null, kind: PeeKind) {
   tickets[victim.team] = Math.max(0, tickets[victim.team] - 1);
   const killer = from?.name ?? 'The forest';
-  feedPush(`${killer} ${killVerbBy(kind)} ${victim.name}`, victim.team === 1 ? '#a8f0a8' : '#ffa0a0');
+  feedPush(`${killer} ${from === derek ? 'mowed down' : killVerbBy(kind)} ${victim.name}`, victim.team === 1 ? '#a8f0a8' : '#ffa0a0');
   const credit = (from as { owner?: Combatant } | null)?.owner ?? from; // a turret's kills are its owner's
+  if (from === derek && Math.random() < 0.25) derek.sayMow();
   if (credit?.isPlayer) {
     kills++;
     if (noStreakT <= 0) {
@@ -1196,6 +1231,13 @@ function renderHud() {
     miniCtx.arc(mx(g.x), mz(g.z), 6.5 * s, 0, Math.PI * 2);
     miniCtx.fill();
   }
+  if (derek.alive) {
+    miniCtx.fillStyle = '#2f9a3a';
+    miniCtx.strokeStyle = '#f2c31a';
+    miniCtx.lineWidth = 2;
+    miniCtx.fillRect(mx(derek.pos.x) - 5, mz(derek.pos.z) - 5, 10, 10);
+    miniCtx.strokeRect(mx(derek.pos.x) - 5, mz(derek.pos.z) - 5, 10, 10);
+  }
   miniCtx.fillStyle = '#111';
   miniCtx.strokeStyle = '#7dff9a';
   miniCtx.lineWidth = 1.5;
@@ -1361,6 +1403,7 @@ function simulate(dt: number) {
   for (const c of everyone) if (c.alive) grid.insert(c);
   grid.insert(rory);
   grid.insert(chris);
+  if (derek.alive) grid.insert(derek);
 
   const hpBefore = player.hp;
   player.update(dt);
@@ -1379,6 +1422,16 @@ function simulate(dt: number) {
   streaks.update(dt);
   rory.update(dt, player);
   chris.update(dt, rory, grid);
+  if (phase === 'play' && !derek.used) {
+    derekIn -= dt;
+    if (derekIn <= 0) derekArrives();
+  }
+  mowCrunch = Math.max(0, mowCrunch - dt);
+  derek.update(dt, grid);
+  if (derek.alive) {
+    const sp = sound.spatial(derek.pos.x, derek.pos.z, 4);
+    sound.mower(Math.min(1, sp.vol * 1.7), sp.pan);
+  } else sound.mower(0, 0);
   weapons.update(dt);
   pickups.update(dt, time, grid, (p, who) => {
     const info = PICKUP_INFO[p.type];
@@ -1424,7 +1477,8 @@ function simulate(dt: number) {
     rewards.length = 0;
     registerKill(player, player.lastFrom, player.lastKind);
     respawnT = PLAYER_RESPAWN;
-    banner(pick(['YOU WERE DRENCHED', 'WELL, THAT STINGS', 'RIP. THE FOREST IS UNIMPRESSED', 'SPLOOSH. YOU ARE DONE']), 2.2);
+    if (player.lastFrom === derek) banner('MOWED DOWN BY DEREK', 2.4);
+    else banner(pick(['YOU WERE DRENCHED', 'WELL, THAT STINGS', 'RIP. THE FOREST IS UNIMPRESSED', 'SPLOOSH. YOU ARE DONE']), 2.2);
   }
   playerWasAlive = player.alive;
   if (!player.alive && phase === 'play') {
@@ -1580,7 +1634,7 @@ tick();
 
 // handy for poking at the game from the console / tests
 (window as unknown as { __pw: unknown }).__pw = {
-  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, chris, placeNpcs, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
+  streaks, rewards, useReward, earn, weapons, pickups, giveWeapon, resetWeapons, derek, chris, placeNpcs, rory, fighterSay, playerSay, announcer, startChaos, endChaos, CHAOS,
   world, nav, player, fighters, zones, potions, pee, fx, forest, grid, sound, camera, scene, mounts, music, trip, toggleRide,
   setRunning: (v: boolean) => { locked = v; },
   applyPlayerClass, setClass: (id: string) => { classId = id; applyPlayerClass(); renderLobby(); }, get classId() { return classId; },

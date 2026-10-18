@@ -794,6 +794,45 @@ export class Sound {
     osc.stop(t + 0.65);
   }
 
+  private mowNodes: { gain: GainNode; pan: StereoPannerNode } | null = null;
+
+  /** Derek's mower: a big, wobbling two-stroke drone. Volume and pan follow where he is; 0 silences it. */
+  mower(vol: number, pan: number) {
+    if (!this.ctx) return;
+    if (!this.mowNodes) {
+      if (vol <= 0.01) return;
+      const o1 = this.ctx.createOscillator();
+      o1.type = 'sawtooth';
+      o1.frequency.value = 46;
+      const o2 = this.ctx.createOscillator();
+      o2.type = 'square';
+      o2.frequency.value = 92.5;
+      const lfo = this.ctx.createOscillator();
+      lfo.frequency.value = 9;
+      const lg = this.ctx.createGain();
+      lg.gain.value = 5;
+      lfo.connect(lg);
+      lg.connect(o1.frequency);
+      lg.connect(o2.frequency);
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 520;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      const p = this.ctx.createStereoPanner();
+      o1.connect(lp);
+      o2.connect(lp);
+      lp.connect(gain).connect(p).connect(this.ctx.destination);
+      o1.start();
+      o2.start();
+      lfo.start();
+      this.mowNodes = { gain, pan: p };
+    }
+    const t = this.ctx.currentTime;
+    this.mowNodes.gain.gain.setTargetAtTime(vol * 0.22, t, 0.08);
+    this.mowNodes.pan.pan.setTargetAtTime(pan, t, 0.08);
+  }
+
   ignite() {
     this.burst(0.35, 3200, 0.35);
     this.tone(0.1, 120, 300, 0.3, 'sawtooth');

@@ -46,7 +46,7 @@ const COMMON: Partial<Record<SayCtx, string[]>> = {
 /** The announcer, who is having a breakdown. */
 export type AnnounceCtx =
   | 'start' | 'capture' | 'lost' | 'streak3' | 'streak5' | 'streak10' | 'low50' | 'low20' | 'victory' | 'defeat' | 'bugpop' | 'filler'
-  | 'turret' | 'airstrike' | 'nuke' | 'strike_call' | 'nuke_call'
+  | 'derek' | 'turret' | 'airstrike' | 'nuke' | 'strike_call' | 'nuke_call'
   | 'chaos_moon' | 'chaos_rainbow' | 'chaos_turbo' | 'chaos_titan' | 'chaos_stampede' | 'chaos_zoom';
 
 const ANNOUNCER: Record<AnnounceCtx, string[]> = {
@@ -62,6 +62,7 @@ const ANNOUNCER: Record<AnnounceCtx, string[]> = {
   defeat: ['Defeat! Your tickets ran dry. Have you tried drinking more water?', 'Well. That was damp. And disappointing.'],
   bugpop: ['A giant bug has exploded into rainbow goo! Do not lick it!', 'Another bug bites the dust! Then the dust bites back!', 'Bug down! Someone fetch a mop and a priest!'],
   filler: ['Remember: stay hydrated. Then un-hydrate.', 'Today is brought to you by the number seven and a hallucination.', 'If you can read this, you are not dreaming. Or are you.', 'I have lost track of what colour the sky should be.', 'Please do not feed the spiders. They are already feeding on you.', 'A reminder that the moon is not real. Neither am I.', 'Somewhere, a gnome is peeing on a rainbow. Is it you?', 'Gnomes are mushrooms who gave up. Discuss.', 'The management accepts no responsibility for lost beards.', 'This broadcast is being watched by seven hundred ghosts.'],
+  derek: ['Warning! Derek is on his mower! He is ten times your size and he is not stopping!', 'Derek has arrived! Run! Or hide! Or get a bigger mower!', 'A farmer on a ride-on mower is loose in the forest! Please keep your gnomes off the grass!'],
   turret: ['Triple kill! Here is a turret! It pees so you do not have to! Press R!', 'Three in a row! A free turret! It has your eyes! And your bladder!'],
   airstrike: ['Five in a row! Air strike unlocked! Press R! Please clear the area of dignity!', 'Pee from above! Air strike ready! Press R!'],
   nuke: ['EIGHT KILLS! Nuclear piss authorised! Press R! The forest will not forget this!', 'You have earned the big one. Press R. Be gentle. Do not be gentle.'],

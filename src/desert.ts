@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { SoftBox, lit, makePaintTexture } from './organic';
 import { World } from './world';
-import { HALF, type ForestInfo, type ZoneDef } from './forest';
+import { HALF, hideInstance, killBox, type ForestInfo, type Plant, type ZoneDef } from './forest';
 
 // deterministic layout, so Desert Trip is the same every time
 let seed = 777777;
@@ -46,6 +46,7 @@ export function buildDesert(world: World, scene: THREE.Scene): ForestInfo {
   ];
   const baseSouth = new THREE.Vector3(0, 0, 97);
   const baseNorth = new THREE.Vector3(0, 0, -97);
+  const plants: Plant[] = [];
   const keepClear: { x: number; z: number; r: number }[] = [
     ...zones.map((z) => ({ x: z.x, z: z.z, r: z.radius + 6 })),
     { x: baseSouth.x, z: baseSouth.z, r: 22 },
@@ -121,7 +122,9 @@ export function buildDesert(world: World, scene: THREE.Scene): ForestInfo {
     put(cArmH, i, c.x + c.arm * (c.w / 2 + len / 2), ay, c.z, len, c.w * 0.7, c.w * 0.7, 0, c.col);
     const vh = c.h * 0.32;
     put(cArmV, i, c.x + c.arm * (c.w / 2 + len), ay + vh / 2, c.z, c.w * 0.7, vh, c.w * 0.7, 0, c.col);
-    world.addCollider(new THREE.Vector3(c.x - c.w / 2, 0, c.z - c.w / 2), new THREE.Vector3(c.x + c.w / 2, c.h, c.z + c.w / 2));
+    const box = world.addCollider(new THREE.Vector3(c.x - c.w / 2, 0, c.z - c.w / 2), new THREE.Vector3(c.x + c.w / 2, c.h, c.z + c.w / 2));
+    const pl: Plant = { x: c.x, z: c.z, col: c.col, alive: true, mow() { pl.alive = false; hideInstance(cTrunk, i); hideInstance(cArmH, i); hideInstance(cArmV, i); killBox(box); } };
+    plants.push(pl);
   });
   for (const m of [cTrunk, cArmH, cArmV]) {
     m.castShadow = true;
@@ -193,7 +196,9 @@ export function buildDesert(world: World, scene: THREE.Scene): ForestInfo {
   palms.forEach((p, i) => {
     put(pTrunk, i, p.x, p.h / 2, p.z, 0.6, p.h, 0.6);
     put(pLeaf, i, p.x, p.h + 0.2, p.z, 7.5, 1.1, 7.5, rnd() * 3, pick([0x30e08a, 0x40f0b0, 0x90f040]));
-    world.addCollider(new THREE.Vector3(p.x - 0.3, 0, p.z - 0.3), new THREE.Vector3(p.x + 0.3, p.h, p.z + 0.3));
+    const box = world.addCollider(new THREE.Vector3(p.x - 0.3, 0, p.z - 0.3), new THREE.Vector3(p.x + 0.3, p.h, p.z + 0.3));
+    const pl: Plant = { x: p.x, z: p.z, col: 0x40f0b0, alive: true, mow() { pl.alive = false; hideInstance(pTrunk, i); hideInstance(pLeaf, i); killBox(box); } };
+    plants.push(pl);
   });
   pLeaf.castShadow = true;
   world.group.add(pTrunk, pLeaf);
@@ -282,7 +287,7 @@ export function buildDesert(world: World, scene: THREE.Scene): ForestInfo {
   scene.add(world.group);
 
   return {
-    zones, baseSouth, baseNorth, spawnSouth, spawnNorth, flagsSouth, flagsNorth, potionSpots,
+    zones, baseSouth, baseNorth, spawnSouth, spawnNorth, flagsSouth, flagsNorth, potionSpots, plants,
     animate(t: number) {
       for (let i = 0; i < orbN; i++) {
         const o = orbBase[i];

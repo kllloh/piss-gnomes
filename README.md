@@ -56,6 +56,7 @@ npm run build      # single self-contained dist/index.html you can double-click
 - **Thermal vision (F):** Sniper Sprinkler and Dew Scout can switch it on: the cold world goes blue and purple, and every gnome and bug glows white-hot.
 - **Chris:** a big black cat who is always with Rory. Every 14 to 22 seconds he farts a cloud of green **health gas** that heals everyone standing in it (friend or foe) for 7 seconds. Look for the green circle on the minimap. He cannot be hurt either. Rory and Chris start each match out in the wild, away from both bases.
 - **Audio:** the music is much quieter now, with a volume slider and music/voices on/off buttons in the lobby (N and M also toggle them in game).
+- **Derek:** once per match, at a random moment in the first two minutes, an old farmer with black hair roars in from a random edge of the map on a giant ride-on mower (about 13 m tall, ten times a gnome). He drives wide, slow turns at 11 m/s for 100 seconds, cutting down every tree, cactus, mushroom and palm under his 13 m deck and mowing down any gnome (or you) in the way, then drives off home. He cannot be hurt, only annoyed. Watch for the green block on the minimap and the announcer's warning.
 - **Maps:** pick on the start screen (the page reloads with the new map). **The Enchanted Forest** is the original night
   forest. **Desert Trip** is a hot, bright, hallucinogenic desert: neon cacti, striped mesas, an oasis, giant bones, a
   spinning sun over the Sun Temple, floating mirage orbs and a swirling day sky. Same zones, bugs, weapons and bots.

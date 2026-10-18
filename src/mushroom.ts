@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { SoftBox, lit, makePaintTexture } from './organic';
 import { World } from './world';
-import { HALF, type ForestInfo, type ZoneDef } from './forest';
+import { HALF, hideInstance, killBox, type ForestInfo, type Plant, type ZoneDef } from './forest';
 
 // deterministic layout, so Mushroom Hollow is the same every time
 let seed = 31337;
@@ -46,6 +46,7 @@ export function buildMushroom(world: World, scene: THREE.Scene): ForestInfo {
   ];
   const baseSouth = new THREE.Vector3(0, 0, 97);
   const baseNorth = new THREE.Vector3(0, 0, -97);
+  const plants: Plant[] = [];
   const keepClear: { x: number; z: number; r: number }[] = [
     ...zones.map((z) => ({ x: z.x, z: z.z, r: z.radius + 6 })),
     { x: baseSouth.x, z: baseSouth.z, r: 22 },
@@ -123,7 +124,9 @@ export function buildMushroom(world: World, scene: THREE.Scene): ForestInfo {
       const r = m.cw * 0.22;
       put(sSpot, i * 4 + k, m.x + Math.cos(a) * r, m.sh + capH * 0.55, m.z + Math.sin(a) * r, m.cw * 0.12, m.cw * 0.05, m.cw * 0.12, a);
     }
-    world.addCollider(new THREE.Vector3(m.x - m.sw / 2, 0, m.z - m.sw / 2), new THREE.Vector3(m.x + m.sw / 2, m.sh, m.z + m.sw / 2));
+    const box = world.addCollider(new THREE.Vector3(m.x - m.sw / 2, 0, m.z - m.sw / 2), new THREE.Vector3(m.x + m.sw / 2, m.sh, m.z + m.sw / 2));
+    const pl: Plant = { x: m.x, z: m.z, col: m.col, alive: true, mow() { pl.alive = false; hideInstance(sStem, i); hideInstance(sCap, i); for (let k = 0; k < 4; k++) hideInstance(sSpot, i * 4 + k); killBox(box); } };
+    plants.push(pl);
   });
   for (const m of [sStem, sCap]) {
     m.castShadow = true;
@@ -141,7 +144,10 @@ export function buildMushroom(world: World, scene: THREE.Scene): ForestInfo {
     const z = between(-HALF + 4, HALF - 4);
     const s = between(0.8, 2);
     put(stems, i, x, 0.3 * s, z, 0.25 * s, 0.6 * s, 0.25 * s);
-    put(caps, i, x, 0.72 * s, z, 1.0 * s, 0.45 * s, 1.0 * s, rnd() * 3, pick(GLOW));
+    const capCol = pick(GLOW);
+    put(caps, i, x, 0.72 * s, z, 1.0 * s, 0.45 * s, 1.0 * s, rnd() * 3, capCol);
+    const pl: Plant = { x, z, col: capCol, alive: true, mow() { pl.alive = false; hideInstance(stems, i); hideInstance(caps, i); } };
+    plants.push(pl);
   }
   world.group.add(stems, caps);
 
@@ -260,7 +266,7 @@ export function buildMushroom(world: World, scene: THREE.Scene): ForestInfo {
   scene.add(world.group);
 
   return {
-    zones, baseSouth, baseNorth, spawnSouth, spawnNorth, flagsSouth, flagsNorth, potionSpots,
+    zones, baseSouth, baseNorth, spawnSouth, spawnNorth, flagsSouth, flagsNorth, potionSpots, plants,
     animate(t: number) {
       for (let i = 0; i < sporeN; i++) {
         const o = sporeBase[i];
