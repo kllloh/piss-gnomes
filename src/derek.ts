@@ -93,15 +93,16 @@ export class Derek implements Combatant {
     for (const sx of [-1, 1]) add(g, glow, 0.9, 0.9, 0.3, sx * 2.3, 4.2, -5.95); // headlights
     add(g, black, 3.2, 0.9, 3.2, 0, 4.1, 3.2); // seat
     add(g, black, 3.2, 3.2, 0.7, 0, 5.5, 4.7); // backrest
-    add(g, yellow, 13, 0.7, 5.6, 0, 1.0, -1.2); // the cutting deck
-    add(g, black, 13.2, 0.4, 5.8, 0, 0.55, -1.2); // its skirt
-    add(g, yellow, 1.6, 1.8, 2.4, 6.9, 1.6, -0.5); // discharge chute
+    add(g, yellow, 13, 0.7, 5.6, 0, 1.0, -9.2); // the cutting deck, slung out in front of the front wheels
+    for (const sx of [-1, 1]) add(g, yellow, 0.8, 0.8, 2.4, sx * 2.6, 1.7, -6.5); // the arms that hold it on
+    add(g, black, 13.2, 0.4, 5.8, 0, 0.55, -9.2); // its skirt
+    add(g, yellow, 1.6, 1.8, 2.4, 6.9, 1.6, -8.6); // discharge chute
     for (const sx of [-1, 1]) add(g, black, 0.4, 6, 0.4, sx * 3.6, 6.0, 4.6); // roll bar
     add(g, black, 7.6, 0.4, 0.4, 0, 9.1, 4.6);
     const exhaust = add(g, black, 0.5, 3.6, 0.5, 2.5, 6.1, -2.8);
     exhaust.name = 'exhaust';
     for (let i = 0; i < 3; i++) { // three whirring blades under the deck
-      const b = add(g, lit({ color: 0xb0b0b8 }), 4.2, 0.12, 0.5, -4 + i * 4, 0.35, -1.2);
+      const b = add(g, lit({ color: 0xb0b0b8 }), 4.2, 0.12, 0.5, -4 + i * 4, 0.35, -9.2);
       this.blades.push(b);
     }
     const mkWheel = (r: number, w: number, x: number, y: number, z: number) => {
@@ -265,8 +266,8 @@ export class Derek implements Combatant {
     }
 
     // cut everything under the deck: the plants...
-    const cx = this.pos.x - Math.sin(this.yaw) * 2.5;
-    const cz = this.pos.z - Math.cos(this.yaw) * 2.5;
+    const cx = this.pos.x - Math.sin(this.yaw) * 9.2; // the deck is out in front
+    const cz = this.pos.z - Math.cos(this.yaw) * 9.2;
     let burst = 0;
     for (const p of this.plants()) {
       if (!p.alive) continue;
