@@ -120,14 +120,16 @@ export class Derek implements Combatant {
     mkWheel(2.8, 1.8, 4.5, 2.8, 3.3);
     mkWheel(1.6, 1.2, -3.7, 1.6, -3.7);
     mkWheel(1.6, 1.2, 3.7, 1.6, -3.7);
-    // steering column and wheel
-    add(g, black, 0.5, 2.6, 0.5, 0, 5.2, -0.5);
+    // steering wheel: tilted up and back towards the driver, with a column running down into the dashboard
     this.wheel = new THREE.Group();
     this.wheel.position.set(0, 6.5, -0.8);
-    this.wheel.rotation.x = 1.0;
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.2, 6, 14), black);
+    this.wheel.rotation.x = -1.1; // the wheel's face points up and back at Derek
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.22, 6, 16), black);
     this.wheel.add(ring);
-    add(this.wheel, black, 2.4, 0.2, 0.2, 0, 0, 0);
+    add(this.wheel, black, 2.2, 0.2, 0.2, 0, 0, 0); // spokes
+    add(this.wheel, black, 0.2, 2.2, 0.2, 0, 0, 0);
+    add(this.wheel, yellow, 0.7, 0.7, 0.3, 0, 0, 0.05); // hub cap
+    add(this.wheel, black, 0.45, 0.45, 2.7, 0, 0, -1.4); // the column, along the wheel's own axis
     g.add(this.wheel);
 
     // --- Derek, seated and shouting ---
